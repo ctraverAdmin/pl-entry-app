@@ -829,7 +829,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
+      <div className="mx-auto max-w-[1800px] space-y-6 p-4 md:p-8">
         <div className="rounded-[28px] bg-gradient-to-r from-slate-950 via-slate-900 to-sky-900 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] md:p-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -931,7 +931,7 @@ export default function App() {
               </div>
 
               <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full text-sm">
+                <table className="min-w-[1700px] text-sm">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
                       <th className="px-4 py-3 text-left font-bold">Job #</th>
