@@ -829,7 +829,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1800px] space-y-6 p-4 md:p-8">
+      <div className="mx-auto max-w-[2200px] space-y-6 p-4 md:p-8">
         <div className="rounded-[28px] bg-gradient-to-r from-slate-950 via-slate-900 to-sky-900 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] md:p-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
