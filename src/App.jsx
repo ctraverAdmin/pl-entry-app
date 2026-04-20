@@ -11,7 +11,14 @@ import {
   X,
 } from "lucide-react";
 
-const STORAGE_KEY = "pl_entry_jobs_v3";
+const STORAGE_KEY = "pl_entry_jobs_v5";
+const departmentOptions = [
+  "Installation",
+  "Design",
+  "Network",
+  "Sales",
+  "Network Integration",
+];
 
 const expenseGroups = [
   {
@@ -23,7 +30,7 @@ const expenseGroups = [
       ["freightDelivery", "Freight and Delivery"],
       ["thirdPartyJobMaterials", "Third Party Job Materials"],
       ["deliveryPickup", "Delivery and Pickup"],
-            ["toolRental", "Tool Rental"],
+      ["toolRental", "Tool Rental"],
       ["equipmentRepairs", "Equipment Repairs"],
       ["equipmentRentals", "Equipment Rentals"],
       ["equipmentFreight", "Equipment Freight"],
@@ -33,6 +40,7 @@ const expenseGroups = [
     title: "Travel Expenses",
     fields: [
       ["baggage", "Baggage"],
+      ["flightChangeExpense", "Flight Change Expense"],
       ["seating", "Seating"],
       ["airfare", "Airfare"],
       ["carRental", "Car Rental"],
@@ -102,6 +110,7 @@ function emptyLine(type = "main", itemNumber = "") {
     freightDelivery: "",
     thirdPartyJobMaterials: "",
     baggage: "",
+    flightChangeExpense: "",
     seating: "",
     airfare: "",
     carRental: "",
@@ -109,9 +118,11 @@ function emptyLine(type = "main", itemNumber = "") {
     hotel: "",
     parking: "",
     meals: "",
-    deliveryPickup: "",    toolRental: "",
+    deliveryPickup: "",
+    toolRental: "",
     layover: "",
-    regular: "",    shiftDiff: "",
+    regular: "",
+    shiftDiff: "",
     shiftDiffOT: "",
     tmBid: "",
     travel: "",
@@ -132,6 +143,7 @@ function createBlankJob() {
     jobNumber: "",
     customer: "",
     description: "",
+    department: "Installation",
     status: "Open",
     lines: [emptyLine("main", "MAIN")],
     createdAt: new Date().toISOString(),
@@ -195,10 +207,7 @@ function runSelfTests() {
   };
   const lineCalc = calculateLine(testLine);
   console.assert(lineCalc.sales === 1000, "sales should equal 1000");
-  console.assert(
-    lineCalc.totalExpenses === 350,
-    "expenses should equal 350"
-  );
+  console.assert(lineCalc.totalExpenses === 350, "expenses should equal 350");
   console.assert(lineCalc.profitLoss === 650, "profit should equal 650");
   console.assert(lineCalc.margin === 65, "margin should equal 65");
 
@@ -211,10 +220,7 @@ function runSelfTests() {
   };
   const jobCalc = calculateJob(testJob);
   console.assert(jobCalc.sales === 150, "job sales should equal 150");
-  console.assert(
-    jobCalc.totalExpenses === 50,
-    "job expenses should equal 50"
-  );
+  console.assert(jobCalc.totalExpenses === 50, "job expenses should equal 50");
   console.assert(jobCalc.profitLoss === 100, "job profit should equal 100");
 }
 
@@ -234,6 +240,24 @@ function Input({ label, className = "", ...props }) {
         {...props}
         className={`h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${className}`}
       />
+    </div>
+  );
+}
+
+function Select({ label, className = "", children, ...props }) {
+  return (
+    <div>
+      {label ? (
+        <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          {label}
+        </label>
+      ) : null}
+      <select
+        {...props}
+        className={`h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100 ${className}`}
+      >
+        {children}
+      </select>
     </div>
   );
 }
@@ -331,10 +355,6 @@ function JobEditorModal({ job, onClose, onSave }) {
     setSelectedLineId(nextLines[0]?.id ?? null);
   };
 
-  const handleSave = () => {
-    onSave(draft);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/55 p-4 md:p-8">
       <div className="w-full max-w-7xl rounded-[28px] border border-slate-200 bg-slate-50 shadow-2xl">
@@ -349,7 +369,7 @@ function JobEditorModal({ job, onClose, onSave }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSave}>
+            <Button variant="secondary" onClick={() => onSave(draft)}>
               <Save className="h-4 w-4" /> Save Job
             </Button>
             <Button variant="ghost" onClick={onClose}>
@@ -359,152 +379,145 @@ function JobEditorModal({ job, onClose, onSave }) {
         </div>
 
         <div className="space-y-6 p-6">
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 text-lg font-bold text-slate-900">Job Header</div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Job #"
-                  value={draft.jobNumber}
-                  onChange={(e) => updateJobField("jobNumber", e.target.value)}
-                  placeholder="25-0001"
-                />
-                <Input
-                  label="Status"
-                  value={draft.status}
-                  onChange={(e) => updateJobField("status", e.target.value)}
-                  placeholder="Open"
-                />
-                <Input
-                  label="Customer"
-                  value={draft.customer}
-                  onChange={(e) => updateJobField("customer", e.target.value)}
-                  placeholder="Customer name"
-                  className="md:col-span-2"
-                />
-                <Textarea
-                  label="Job Description"
-                  value={draft.description}
-                  onChange={(e) => updateJobField("description", e.target.value)}
-                  placeholder="Main job description"
-                  className="md:col-span-2"
-                />
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 text-lg font-bold text-slate-900">Job Header</div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Input
+                label="Job #"
+                value={draft.jobNumber}
+                onChange={(e) => updateJobField("jobNumber", e.target.value)}
+                placeholder="25-0001"
+              />
+              <Select
+                label="Department"
+                value={draft.department}
+                onChange={(e) => updateJobField("department", e.target.value)}
+              >
+                {departmentOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="Status"
+                value={draft.status}
+                onChange={(e) => updateJobField("status", e.target.value)}
+                placeholder="Open"
+              />
+              <Input
+                label="Customer"
+                value={draft.customer}
+                onChange={(e) => updateJobField("customer", e.target.value)}
+                placeholder="Customer name"
+              />
+              <Textarea
+                label="Job Description"
+                value={draft.description}
+                onChange={(e) => updateJobField("description", e.target.value)}
+                placeholder="Main job description"
+                className="md:col-span-2 lg:col-span-4"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-lg font-bold text-slate-900">
+                Main Job + Change Orders
               </div>
+              <Button onClick={addChangeOrder}>
+                <Plus className="h-4 w-4" /> Add Change Order
+              </Button>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-bold text-slate-900">
-                  Main Job + Change Orders
-                </div>
-                <Button onClick={addChangeOrder}>
-                  <Plus className="h-4 w-4" /> Add Change Order
-                </Button>
-              </div>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-100 text-slate-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-bold">Type</th>
+                    <th className="px-4 py-3 text-left font-bold">Number</th>
+                    <th className="px-4 py-3 text-left font-bold">Description</th>
+                    <th className="px-4 py-3 text-right font-bold">Sales</th>
+                    <th className="px-4 py-3 text-right font-bold">Expenses</th>
+                    <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
+                    <th className="px-4 py-3 text-right font-bold">Margin</th>
+                    <th className="px-4 py-3 text-center font-bold">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.lines.map((line) => {
+                    const calc = calculateLine(line);
+                    const active = selectedLineId === line.id;
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-100 text-slate-700">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-bold">Type</th>
-                      <th className="px-4 py-3 text-left font-bold">Number</th>
-                      <th className="px-4 py-3 text-left font-bold">Description</th>
-                      <th className="px-4 py-3 text-right font-bold">Sales</th>
-                      <th className="px-4 py-3 text-right font-bold">Expenses</th>
-                      <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
-                      <th className="px-4 py-3 text-right font-bold">Margin</th>
-                      <th className="px-4 py-3 text-center font-bold">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draft.lines.map((line) => {
-                      const calc = calculateLine(line);
-                      const active = selectedLineId === line.id;
-
-                      return (
-                        <tr
-                          key={line.id}
-                          className={`cursor-pointer border-t border-slate-200 ${
-                            active ? "bg-sky-50" : "bg-white hover:bg-slate-50"
+                    return (
+                      <tr
+                        key={line.id}
+                        className={`cursor-pointer border-t border-slate-200 ${
+                          active ? "bg-sky-50" : "bg-white hover:bg-slate-50"
+                        }`}
+                        onClick={() => setSelectedLineId(line.id)}
+                      >
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          {line.type === "main" ? "Main Job" : "Change Order"}
+                        </td>
+                        <td className="px-4 py-3">{line.itemNumber || "-"}</td>
+                        <td className="max-w-[280px] truncate px-4 py-3">
+                          {line.description || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
                           }`}
-                          onClick={() => setSelectedLineId(line.id)}
                         >
-                          <td className="px-4 py-3 font-semibold text-slate-700">
-                            {line.type === "main" ? "Main Job" : "Change Order"}
-                          </td>
-                          <td className="px-4 py-3">{line.itemNumber || "-"}</td>
-                          <td className="max-w-[280px] truncate px-4 py-3">
-                            {line.description || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {formatCurrency(calc.sales)}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {formatCurrency(calc.totalExpenses)}
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-right font-semibold ${
-                              calc.profitLoss >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {formatCurrency(calc.profitLoss)}
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-right font-semibold ${
-                              calc.margin >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {formatPercent(calc.margin)}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {line.type === "changeOrder" ? (
-                              <button
-                                className="rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteLine(line.id);
-                                }}
-                                type="button"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            ) : (
-                              <span className="text-xs text-slate-400">Locked</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          {formatCurrency(calc.profitLoss)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            calc.margin >= 0 ? "text-emerald-600" : "text-red-600"
+                          }`}
+                        >
+                          {formatPercent(calc.margin)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {line.type === "changeOrder" ? (
+                            <button
+                              className="rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteLine(line.id);
+                              }}
+                              type="button"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400">Locked</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard title="Job Sales" value={formatCurrency(jobTotals.sales)} />
-              <StatCard
-                title="Job Expenses"
-                value={formatCurrency(jobTotals.totalExpenses)}
-              />
-              <StatCard
-                title="Job Profit / Loss"
-                value={formatCurrency(jobTotals.profitLoss)}
-                accent={
-                  jobTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
-                }
-              />
-              <StatCard
-                title="Job Margin"
-                value={formatPercent(jobTotals.margin)}
-                accent={
-                  jobTotals.margin >= 0 ? "text-emerald-600" : "text-red-600"
-                }
-              />
-            </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Job Sales" value={formatCurrency(jobTotals.sales)} />
+            <StatCard title="Job Expenses" value={formatCurrency(jobTotals.totalExpenses)} />
+            <StatCard
+              title="Job Profit / Loss"
+              value={formatCurrency(jobTotals.profitLoss)}
+              accent={jobTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+            />
+            <StatCard
+              title="Job Margin"
+              value={formatPercent(jobTotals.margin)}
+              accent={jobTotals.margin >= 0 ? "text-emerald-600" : "text-red-600"}
+            />
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -513,9 +526,7 @@ function JobEditorModal({ job, onClose, onSave }) {
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-sky-700">
-                      {selectedLine.type === "main"
-                        ? "Main Job Detail"
-                        : "Change Order Detail"}
+                      {selectedLine.type === "main" ? "Main Job Detail" : "Change Order Detail"}
                     </div>
                     <div className="mt-1 text-2xl font-bold text-slate-900">
                       {selectedLine.itemNumber || "Detail"}
@@ -526,7 +537,7 @@ function JobEditorModal({ job, onClose, onSave }) {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <Input
                     label="Type"
                     value={selectedLine.type === "main" ? "Main Job" : "Change Order"}
@@ -535,31 +546,25 @@ function JobEditorModal({ job, onClose, onSave }) {
                   <Input
                     label="Main Job / CO #"
                     value={selectedLine.itemNumber}
-                    onChange={(e) =>
-                      updateLineField(selectedLine.id, "itemNumber", e.target.value)
-                    }
+                    onChange={(e) => updateLineField(selectedLine.id, "itemNumber", e.target.value)}
                     placeholder="MAIN or CO-1"
                     disabled={selectedLine.type === "main"}
-                  />
-                  <Textarea
-                    label="Description"
-                    value={selectedLine.description}
-                    onChange={(e) =>
-                      updateLineField(selectedLine.id, "description", e.target.value)
-                    }
-                    placeholder="Describe the main job or change order"
-                    className="md:col-span-2"
                   />
                   <Input
                     label="Sales"
                     type="number"
                     step="0.01"
                     value={selectedLine.sales}
-                    onChange={(e) =>
-                      updateLineField(selectedLine.id, "sales", e.target.value)
-                    }
+                    onChange={(e) => updateLineField(selectedLine.id, "sales", e.target.value)}
                     placeholder="0.00"
-                    className="md:col-span-2"
+                  />
+                  <div />
+                  <Textarea
+                    label="Description"
+                    value={selectedLine.description}
+                    onChange={(e) => updateLineField(selectedLine.id, "description", e.target.value)}
+                    placeholder="Describe the main job or change order"
+                    className="md:col-span-2 lg:col-span-4"
                   />
                 </div>
 
@@ -571,7 +576,7 @@ function JobEditorModal({ job, onClose, onSave }) {
                     <div className="mb-3 text-base font-bold text-slate-900">
                       {group.title}
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       {group.fields.map(([key, label]) => (
                         <Input
                           key={key}
@@ -579,9 +584,7 @@ function JobEditorModal({ job, onClose, onSave }) {
                           type="number"
                           step="0.01"
                           value={selectedLine[key]}
-                          onChange={(e) =>
-                            updateLineField(selectedLine.id, key, e.target.value)
-                          }
+                          onChange={(e) => updateLineField(selectedLine.id, key, e.target.value)}
                           placeholder="0.00"
                         />
                       ))}
@@ -593,9 +596,7 @@ function JobEditorModal({ job, onClose, onSave }) {
                   <Textarea
                     label="Note"
                     value={selectedLine.note}
-                    onChange={(e) =>
-                      updateLineField(selectedLine.id, "note", e.target.value)
-                    }
+                    onChange={(e) => updateLineField(selectedLine.id, "note", e.target.value)}
                     placeholder="Add notes for this job line or change order"
                   />
                 </div>
@@ -613,6 +614,7 @@ function JobEditorModal({ job, onClose, onSave }) {
 export default function App() {
   const [jobs, setJobs] = useState([]);
   const [search, setSearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("All Departments");
   const [activeTab, setActiveTab] = useState("jobs");
   const [editingJobId, setEditingJobId] = useState(null);
 
@@ -641,17 +643,22 @@ export default function App() {
 
   const filteredJobs = useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return jobs;
+    return jobs.filter((job) => {
+      const matchesSearch =
+        term === "" ||
+        [job.jobNumber, job.customer, job.description, job.status, job.department]
+          .some((value) => String(value || "").toLowerCase().includes(term));
 
-    return jobs.filter((job) =>
-      [job.jobNumber, job.customer, job.description, job.status].some((value) =>
-        String(value || "").toLowerCase().includes(term)
-      )
-    );
-  }, [jobs, search]);
+      const matchesDepartment =
+        departmentFilter === "All Departments" ||
+        (job.department || "") === departmentFilter;
+
+      return matchesSearch && matchesDepartment;
+    });
+  }, [jobs, search, departmentFilter]);
 
   const reportTotals = useMemo(() => {
-    return jobs.reduce(
+    return filteredJobs.reduce(
       (acc, job) => {
         const calc = calculateJob(job);
         acc.sales += calc.sales;
@@ -661,12 +668,10 @@ export default function App() {
       },
       { sales: 0, totalExpenses: 0, profitLoss: 0 }
     );
-  }, [jobs]);
+  }, [filteredJobs]);
 
   const reportMargin =
-    reportTotals.sales > 0
-      ? (reportTotals.profitLoss / reportTotals.sales) * 100
-      : 0;
+    reportTotals.sales > 0 ? (reportTotals.profitLoss / reportTotals.sales) * 100 : 0;
 
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
 
@@ -677,9 +682,7 @@ export default function App() {
   };
 
   const saveJob = (updatedJob) => {
-    setJobs((prev) =>
-      prev.map((job) => (job.id === updatedJob.id ? updatedJob : job))
-    );
+    setJobs((prev) => prev.map((job) => (job.id === updatedJob.id ? updatedJob : job)));
     setEditingJobId(null);
   };
 
@@ -705,12 +708,13 @@ export default function App() {
   };
 
   const exportReport = () => {
-    const report = jobs.map((job) => {
+    const report = filteredJobs.map((job) => {
       const calc = calculateJob(job);
       return {
         jobNumber: job.jobNumber,
         customer: job.customer,
         description: job.description,
+        department: job.department,
         status: job.status,
         sales: calc.sales,
         totalExpenses: calc.totalExpenses,
@@ -767,9 +771,7 @@ export default function App() {
                 Main Job P&amp;L and Change Order P&amp;L in One App
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200 md:text-base">
-                Create a parent job, add change orders under the same job, track
-                separate profitability for each line, and view rolled-up totals
-                for the full project.
+                Create a parent job, add change orders under the same job, track separate profitability for each line, and view rolled-up totals for the full project.
               </p>
             </div>
             <div className="flex gap-2">
@@ -789,20 +791,13 @@ export default function App() {
         {activeTab === "jobs" ? (
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard title="Total Jobs" value={String(jobs.length)} />
+              <StatCard title="Visible Jobs" value={String(filteredJobs.length)} />
               <StatCard title="Total Sales" value={formatCurrency(reportTotals.sales)} />
-              <StatCard
-                title="Total Expenses"
-                value={formatCurrency(reportTotals.totalExpenses)}
-              />
+              <StatCard title="Total Expenses" value={formatCurrency(reportTotals.totalExpenses)} />
               <StatCard
                 title="Total Profit / Loss"
                 value={formatCurrency(reportTotals.profitLoss)}
-                accent={
-                  reportTotals.profitLoss >= 0
-                    ? "text-emerald-600"
-                    : "text-red-600"
-                }
+                accent={reportTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
             </div>
 
@@ -814,8 +809,18 @@ export default function App() {
                     Open a job to manage the main contract and all change orders.
                   </div>
                 </div>
-                <div className="w-full lg:w-[360px]">
-                  <div className="relative">
+                <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
+                  <div className="min-w-[220px]">
+                    <Select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+                      <option value="All Departments">All Departments</option>
+                      {departmentOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="relative w-full lg:w-[360px]">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       value={search}
@@ -827,13 +832,14 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+              <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
                       <th className="px-4 py-3 text-left font-bold">Job #</th>
                       <th className="px-4 py-3 text-left font-bold">Customer</th>
                       <th className="px-4 py-3 text-left font-bold">Description</th>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
                       <th className="px-4 py-3 text-left font-bold">Status</th>
                       <th className="px-4 py-3 text-right font-bold">Sales</th>
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
@@ -846,43 +852,27 @@ export default function App() {
                   <tbody>
                     {filteredJobs.map((job) => {
                       const calc = calculateJob(job);
-                      const coCount = job.lines.filter(
-                        (line) => line.type === "changeOrder"
-                      ).length;
+                      const coCount = job.lines.filter((line) => line.type === "changeOrder").length;
 
                       return (
-                        <tr
-                          key={job.id}
-                          className="border-t border-slate-200 bg-white hover:bg-slate-50"
-                        >
-                          <td className="px-4 py-3 font-semibold text-slate-900">
-                            {job.jobNumber || "—"}
-                          </td>
+                        <tr key={job.id} className="border-t border-slate-200 bg-white hover:bg-slate-50">
+                          <td className="px-4 py-3 font-semibold text-slate-900">{job.jobNumber || "—"}</td>
                           <td className="px-4 py-3">{job.customer || "—"}</td>
-                          <td className="max-w-[320px] truncate px-4 py-3">
-                            {job.description || "—"}
-                          </td>
+                          <td className="max-w-[320px] truncate px-4 py-3">{job.description || "—"}</td>
+                          <td className="px-4 py-3">{job.department || "—"}</td>
                           <td className="px-4 py-3">{job.status || "—"}</td>
-                          <td className="px-4 py-3 text-right">
-                            {formatCurrency(calc.sales)}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {formatCurrency(calc.totalExpenses)}
-                          </td>
+                          <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
+                          <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
                           <td
                             className={`px-4 py-3 text-right font-semibold ${
-                              calc.profitLoss >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
+                              calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
                             }`}
                           >
                             {formatCurrency(calc.profitLoss)}
                           </td>
                           <td
                             className={`px-4 py-3 text-right font-semibold ${
-                              calc.margin >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
+                              calc.margin >= 0 ? "text-emerald-600" : "text-red-600"
                             }`}
                           >
                             {formatPercent(calc.margin)}
@@ -913,7 +903,7 @@ export default function App() {
                     })}
                     {filteredJobs.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                        <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                           No jobs found.
                         </td>
                       </tr>
@@ -926,26 +916,13 @@ export default function App() {
         ) : (
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard title="Report Jobs" value={String(filteredJobs.length)} />
               <StatCard title="Report Sales" value={formatCurrency(reportTotals.sales)} />
-              <StatCard
-                title="Report Expenses"
-                value={formatCurrency(reportTotals.totalExpenses)}
-              />
-              <StatCard
-                title="Report Profit / Loss"
-                value={formatCurrency(reportTotals.profitLoss)}
-                accent={
-                  reportTotals.profitLoss >= 0
-                    ? "text-emerald-600"
-                    : "text-red-600"
-                }
-              />
+              <StatCard title="Report Expenses" value={formatCurrency(reportTotals.totalExpenses)} />
               <StatCard
                 title="Overall Margin"
                 value={formatPercent(reportMargin)}
-                accent={
-                  reportMargin >= 0 ? "text-emerald-600" : "text-red-600"
-                }
+                accent={reportMargin >= 0 ? "text-emerald-600" : "text-red-600"}
               />
             </div>
 
@@ -953,13 +930,14 @@ export default function App() {
               <div className="mb-4 text-xl font-bold text-slate-900">
                 Job Profitability Report
               </div>
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
                       <th className="px-4 py-3 text-left font-bold">Job #</th>
                       <th className="px-4 py-3 text-left font-bold">Customer</th>
                       <th className="px-4 py-3 text-left font-bold">Description</th>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
                       <th className="px-4 py-3 text-right font-bold">Sales</th>
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
                       <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
@@ -967,36 +945,27 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {jobs.map((job) => {
+                    {filteredJobs.map((job) => {
                       const calc = calculateJob(job);
                       return (
                         <React.Fragment key={job.id}>
                           <tr className="border-t border-slate-200 bg-white">
-                            <td className="px-4 py-3 font-semibold text-slate-900">
-                              {job.jobNumber || "—"}
-                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">{job.jobNumber || "—"}</td>
                             <td className="px-4 py-3">{job.customer || "—"}</td>
                             <td className="px-4 py-3">{job.description || "—"}</td>
-                            <td className="px-4 py-3 text-right">
-                              {formatCurrency(calc.sales)}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {formatCurrency(calc.totalExpenses)}
-                            </td>
+                            <td className="px-4 py-3">{job.department || "—"}</td>
+                            <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
+                            <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
                             <td
                               className={`px-4 py-3 text-right font-semibold ${
-                                calc.profitLoss >= 0
-                                  ? "text-emerald-600"
-                                  : "text-red-600"
+                                calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
                               }`}
                             >
                               {formatCurrency(calc.profitLoss)}
                             </td>
                             <td
                               className={`px-4 py-3 text-right font-semibold ${
-                                calc.margin >= 0
-                                  ? "text-emerald-600"
-                                  : "text-red-600"
+                                calc.margin >= 0 ? "text-emerald-600" : "text-red-600"
                               }`}
                             >
                               {formatPercent(calc.margin)}
@@ -1012,32 +981,21 @@ export default function App() {
                                 <td className="px-4 py-2 pl-8 text-xs font-semibold uppercase tracking-[0.08em]">
                                   {line.type === "main" ? "Main Job" : "Change Order"}
                                 </td>
-                                <td className="px-4 py-2 text-xs">
-                                  {line.itemNumber || "—"}
-                                </td>
-                                <td className="px-4 py-2 text-xs">
-                                  {line.description || "—"}
-                                </td>
-                                <td className="px-4 py-2 text-right text-xs">
-                                  {formatCurrency(lineCalc.sales)}
-                                </td>
-                                <td className="px-4 py-2 text-right text-xs">
-                                  {formatCurrency(lineCalc.totalExpenses)}
-                                </td>
+                                <td className="px-4 py-2 text-xs">{line.itemNumber || "—"}</td>
+                                <td className="px-4 py-2 text-xs">{line.description || "—"}</td>
+                                <td className="px-4 py-2 text-xs">{job.department || "—"}</td>
+                                <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.sales)}</td>
+                                <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.totalExpenses)}</td>
                                 <td
                                   className={`px-4 py-2 text-right text-xs font-semibold ${
-                                    lineCalc.profitLoss >= 0
-                                      ? "text-emerald-600"
-                                      : "text-red-600"
+                                    lineCalc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
                                   }`}
                                 >
                                   {formatCurrency(lineCalc.profitLoss)}
                                 </td>
                                 <td
                                   className={`px-4 py-2 text-right text-xs font-semibold ${
-                                    lineCalc.margin >= 0
-                                      ? "text-emerald-600"
-                                      : "text-red-600"
+                                    lineCalc.margin >= 0 ? "text-emerald-600" : "text-red-600"
                                   }`}
                                 >
                                   {formatPercent(lineCalc.margin)}
