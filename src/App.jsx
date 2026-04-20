@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 
-const STORAGE_KEY = "pl_entry_jobs_v6";
+const STORAGE_KEY = "pl_entry_jobs_v5";
 
 const departmentOptions = [
   "Installation",
