@@ -460,72 +460,81 @@ function JobEditorModal({ job, onClose, onSave }) {
                     <th className="px-4 py-3 text-center font-bold">Action</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {draft.lines.map((line) => {
-                    const calc = calculateLine(line);
-                    const active = selectedLineId === line.id;
+               <tbody>
+  {filteredJobs.map((job) => {
+    const calc = calculateJob(job);
+    const changeOrders = job.lines.filter((line) => line.type === "changeOrder");
 
-                    return (
-                      <tr
-                        key={line.id}
-                        className={`cursor-pointer border-t border-slate-200 ${
-                          active ? "bg-sky-50" : "bg-white hover:bg-slate-50"
-                        }`}
-                        onClick={() => setSelectedLineId(line.id)}
-                      >
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          {line.type === "main" ? "Main Job" : "Change Order"}
-                        </td>
-                        <td className="px-4 py-3">{line.itemNumber || "-"}</td>
-                        <td className="max-w-[280px] truncate px-4 py-3">
-                          {line.description || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {formatCurrency(calc.sales)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {formatCurrency(calc.totalExpenses)}
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-semibold ${
-                            calc.profitLoss >= 0
-                              ? "text-emerald-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {formatCurrency(calc.profitLoss)}
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-semibold ${
-                            calc.margin >= 0
-                              ? "text-emerald-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {formatPercent(calc.margin)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {line.type === "changeOrder" ? (
-                            <button
-                              className="rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteLine(line.id);
-                              }}
-                              type="button"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-400">
-                              Locked
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
+    return (
+      <React.Fragment key={job.id}>
+        <tr className="border-t border-slate-200 bg-white">
+          <td className="px-4 py-3 font-semibold text-slate-900">{job.jobNumber || "—"}</td>
+          <td className="px-4 py-3">{job.customer || "—"}</td>
+          <td className="px-4 py-3">{job.description || "—"}</td>
+          <td className="px-4 py-3">{job.department || "—"}</td>
+          <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
+          <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
+          <td
+            className={`px-4 py-3 text-right font-semibold ${
+              calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
+            }`}
+          >
+            {formatCurrency(calc.profitLoss)}
+          </td>
+          <td
+            className={`px-4 py-3 text-right font-semibold ${
+              calc.margin >= 0 ? "text-emerald-600" : "text-red-600"
+            }`}
+          >
+            {formatPercent(calc.margin)}
+          </td>
+        </tr>
+
+        {changeOrders.map((line) => {
+          const lineCalc = calculateLine(line);
+
+          return (
+            <tr
+              key={line.id}
+              className="border-t border-slate-100 bg-slate-50/70 text-slate-600"
+            >
+              <td className="px-4 py-2 pl-8 text-xs font-semibold uppercase tracking-[0.08em]">
+                Change Order
+              </td>
+              <td className="px-4 py-2 text-xs">{line.itemNumber || "—"}</td>
+              <td className="px-4 py-2 text-xs">{line.description || "—"}</td>
+              <td className="px-4 py-2 text-xs">{job.department || "—"}</td>
+              <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.sales)}</td>
+              <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.totalExpenses)}</td>
+              <td
+                className={`px-4 py-2 text-right text-xs font-semibold ${
+                  lineCalc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
+                }`}
+              >
+                {formatCurrency(lineCalc.profitLoss)}
+              </td>
+              <td
+                className={`px-4 py-2 text-right text-xs font-semibold ${
+                  lineCalc.margin >= 0 ? "text-emerald-600" : "text-red-600"
+                }`}
+              >
+                {formatPercent(lineCalc.margin)}
+              </td>
+            </tr>
+          );
+        })}
+      </React.Fragment>
+    );
+  })}
+
+  {filteredJobs.length === 0 ? (
+    <tr>
+      <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+        No jobs found.
+      </td>
+    </tr>
+  ) : null}
+</tbody>
               </table>
             </div>
           </div>
