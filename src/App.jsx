@@ -103,6 +103,31 @@ function freightPercentOfMaterials(freight, materials) {
   return (freightValue / materialsValue) * 100;
 }
 
+function totalsForJobs(jobList) {
+  return jobList.reduce(
+    (acc, job) => {
+      const calc = calculateJob(job);
+      acc.sales += calc.sales;
+      acc.totalExpenses += calc.totalExpenses;
+      acc.profitLoss += calc.profitLoss;
+
+      (job.lines || []).forEach((line) => {
+        acc.materials += toNumber(line.materials);
+        acc.freightDelivery += toNumber(line.freightDelivery);
+      });
+
+      return acc;
+    },
+    {
+      sales: 0,
+      totalExpenses: 0,
+      profitLoss: 0,
+      materials: 0,
+      freightDelivery: 0,
+    }
+  );
+}
+
 function emptyLine(type = "main", itemNumber = "") {
   return {
     id: uid(),
@@ -694,29 +719,11 @@ export default function App() {
   }, [jobs, search, departmentFilter]);
 
   const overallTotals = useMemo(() => {
-    return jobs.reduce(
-      (acc, job) => {
-        const calc = calculateJob(job);
-        acc.sales += calc.sales;
-        acc.totalExpenses += calc.totalExpenses;
-        acc.profitLoss += calc.profitLoss;
-        return acc;
-      },
-      { sales: 0, totalExpenses: 0, profitLoss: 0 }
-    );
+    return totalsForJobs(jobs);
   }, [jobs]);
 
   const filteredTotals = useMemo(() => {
-    return filteredJobs.reduce(
-      (acc, job) => {
-        const calc = calculateJob(job);
-        acc.sales += calc.sales;
-        acc.totalExpenses += calc.totalExpenses;
-        acc.profitLoss += calc.profitLoss;
-        return acc;
-      },
-      { sales: 0, totalExpenses: 0, profitLoss: 0 }
-    );
+    return totalsForJobs(filteredJobs);
   }, [filteredJobs]);
 
   const overallMargin =
@@ -724,6 +731,16 @@ export default function App() {
 
   const filteredMargin =
     filteredTotals.sales > 0 ? (filteredTotals.profitLoss / filteredTotals.sales) * 100 : 0;
+
+  const overallFreightPct = freightPercentOfMaterials(
+    overallTotals.freightDelivery,
+    overallTotals.materials
+  );
+
+  const filteredFreightPct = freightPercentOfMaterials(
+    filteredTotals.freightDelivery,
+    filteredTotals.materials
+  );
 
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
 
@@ -842,12 +859,17 @@ export default function App() {
 
         {activeTab === "jobs" ? (
           <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <StatCard title="Visible Jobs" value={String(filteredJobs.length)} />
               <StatCard
                 title="Overall Profit / Loss"
                 value={formatCurrency(overallTotals.profitLoss)}
                 accent={overallTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+              />
+              <StatCard
+                title="Overall Freight % of Materials"
+                value={formatPercent(overallFreightPct)}
+                accent="text-amber-600"
               />
               <StatCard
                 title="Overall Margin"
@@ -858,6 +880,22 @@ export default function App() {
                 title={departmentFilter === "All Departments" ? "Filtered Profit / Loss (All)" : `${departmentFilter} Profit / Loss`}
                 value={formatCurrency(filteredTotals.profitLoss)}
                 accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                title={departmentFilter === "All Departments" ? "Filtered Materials" : `${departmentFilter} Materials`}
+                value={formatCurrency(filteredTotals.materials)}
+              />
+              <StatCard
+                title={departmentFilter === "All Departments" ? "Filtered Freight" : `${departmentFilter} Freight`}
+                value={formatCurrency(filteredTotals.freightDelivery)}
+              />
+              <StatCard
+                title={departmentFilter === "All Departments" ? "Filtered Freight % of Materials" : `${departmentFilter} Freight % of Materials`}
+                value={formatPercent(filteredFreightPct)}
+                accent="text-amber-600"
               />
             </div>
 
@@ -975,7 +1013,7 @@ export default function App() {
           </>
         ) : (
           <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <StatCard title="Report Jobs" value={String(filteredJobs.length)} />
               <StatCard
                 title="Report Sales"
@@ -990,6 +1028,11 @@ export default function App() {
                 title="Filtered Margin"
                 value={formatPercent(filteredMargin)}
                 accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"}
+              />
+              <StatCard
+                title="Filtered Freight % of Materials"
+                value={formatPercent(filteredFreightPct)}
+                accent="text-amber-600"
               />
             </div>
 
