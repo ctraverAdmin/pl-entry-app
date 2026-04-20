@@ -693,7 +693,20 @@ export default function App() {
     });
   }, [jobs, search, departmentFilter]);
 
-  const reportTotals = useMemo(() => {
+  const overallTotals = useMemo(() => {
+    return jobs.reduce(
+      (acc, job) => {
+        const calc = calculateJob(job);
+        acc.sales += calc.sales;
+        acc.totalExpenses += calc.totalExpenses;
+        acc.profitLoss += calc.profitLoss;
+        return acc;
+      },
+      { sales: 0, totalExpenses: 0, profitLoss: 0 }
+    );
+  }, [jobs]);
+
+  const filteredTotals = useMemo(() => {
     return filteredJobs.reduce(
       (acc, job) => {
         const calc = calculateJob(job);
@@ -706,8 +719,11 @@ export default function App() {
     );
   }, [filteredJobs]);
 
-  const reportMargin =
-    reportTotals.sales > 0 ? (reportTotals.profitLoss / reportTotals.sales) * 100 : 0;
+  const overallMargin =
+    overallTotals.sales > 0 ? (overallTotals.profitLoss / overallTotals.sales) * 100 : 0;
+
+  const filteredMargin =
+    filteredTotals.sales > 0 ? (filteredTotals.profitLoss / filteredTotals.sales) * 100 : 0;
 
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
 
@@ -828,12 +844,20 @@ export default function App() {
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard title="Visible Jobs" value={String(filteredJobs.length)} />
-              <StatCard title="Total Sales" value={formatCurrency(reportTotals.sales)} />
-              <StatCard title="Total Expenses" value={formatCurrency(reportTotals.totalExpenses)} />
               <StatCard
-                title="Total Profit / Loss"
-                value={formatCurrency(reportTotals.profitLoss)}
-                accent={reportTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+                title="Overall Profit / Loss"
+                value={formatCurrency(overallTotals.profitLoss)}
+                accent={overallTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+              />
+              <StatCard
+                title="Overall Margin"
+                value={formatPercent(overallMargin)}
+                accent={overallMargin >= 0 ? "text-emerald-600" : "text-red-600"}
+              />
+              <StatCard
+                title={departmentFilter === "All Departments" ? "Filtered Profit / Loss (All)" : `${departmentFilter} Profit / Loss`}
+                value={formatCurrency(filteredTotals.profitLoss)}
+                accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
             </div>
 
@@ -953,12 +977,19 @@ export default function App() {
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard title="Report Jobs" value={String(filteredJobs.length)} />
-              <StatCard title="Report Sales" value={formatCurrency(reportTotals.sales)} />
-              <StatCard title="Report Expenses" value={formatCurrency(reportTotals.totalExpenses)} />
               <StatCard
-                title="Overall Margin"
-                value={formatPercent(reportMargin)}
-                accent={reportMargin >= 0 ? "text-emerald-600" : "text-red-600"}
+                title="Report Sales"
+                value={formatCurrency(filteredTotals.sales)}
+              />
+              <StatCard
+                title={departmentFilter === "All Departments" ? "Filtered Profit / Loss (All)" : `${departmentFilter} Profit / Loss`}
+                value={formatCurrency(filteredTotals.profitLoss)}
+                accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+              />
+              <StatCard
+                title="Filtered Margin"
+                value={formatPercent(filteredMargin)}
+                accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"}
               />
             </div>
 
