@@ -218,6 +218,33 @@ function overheadByDepartment(entries) {
   });
 }
 
+function buildDepartmentOverheadMap(entries) {
+  return entries.reduce((acc, entry) => {
+    const dept = entry.department || "Unknown";
+    acc[dept] = (acc[dept] || 0) + toNumber(entry.amount);
+    return acc;
+  }, {});
+}
+
+function buildDepartmentSalesMap(jobList) {
+  return jobList.reduce((acc, job) => {
+    const dept = job.department || "Unknown";
+    const sales = calculateJob(job).sales;
+    acc[dept] = (acc[dept] || 0) + sales;
+    return acc;
+  }, {});
+}
+
+function calculateAllocatedOverhead(job, departmentSalesMap, departmentOverheadMap) {
+  const dept = job.department || "Unknown";
+  const jobSales = calculateJob(job).sales;
+  const departmentSales = departmentSalesMap[dept] || 0;
+  const departmentOverhead = departmentOverheadMap[dept] || 0;
+
+  if (departmentSales <= 0 || departmentOverhead <= 0 || jobSales <= 0) return 0;
+  return departmentOverhead * (jobSales / departmentSales);
+}
+
 function emptyLine(type = "main", itemNumber = "") {
   return {
     id: uid(),
@@ -1111,6 +1138,92 @@ export default function App() {
     filteredTotals.materials
   );
 
+  const reportOverheadEntries = useMemo(() => {
+    return overheadEntries.filter((entry) => {
+      return (
+        departmentFilter === "All Departments" ||
+        entry.department === departmentFilter
+      );
+    });
+  }, [overheadEntries, departmentFilter]);
+
+  const reportOverheadTotals = useMemo(
+    () => totalsForOverhead(reportOverheadEntries),
+    [reportOverheadEntries]
+  );
+
+  const reportDepartmentOverheadMap = useMemo(
+    () => buildDepartmentOverheadMap(reportOverheadEntries),
+    [reportOverheadEntries]
+  );
+
+  const reportDepartmentSalesMap = useMemo(
+    () => buildDepartmentSalesMap(filteredJobs),
+    [filteredJobs]
+  );
+
+  const adjustedReportRows = useMemo(() => {
+    return filteredJobs.map((job) => {
+      const calc = calculateJob(job);
+      const allocatedOverhead = calculateAllocatedOverhead(
+        job,
+        reportDepartmentSalesMap,
+        reportDepartmentOverheadMap
+      );
+      const adjustedProfitLoss = calc.profitLoss - allocatedOverhead;
+      const adjustedMargin = calc.sales > 0 ? (adjustedProfitLoss / calc.sales) * 100 : 0;
+
+      return {
+        job,
+        calc,
+        allocatedOverhead,
+        adjustedProfitLoss,
+        adjustedMargin,
+      };
+    });
+  }, [filteredJobs, reportDepartmentSalesMap, reportDepartmentOverheadMap]);
+
+  const adjustedReportTotals = useMemo(() => {
+    const grossProfitLoss = filteredTotals.profitLoss;
+    const totalOverhead = reportOverheadTotals.total;
+    const adjustedProfitLoss = grossProfitLoss - totalOverhead;
+    const adjustedMargin =
+      filteredTotals.sales > 0 ? (adjustedProfitLoss / filteredTotals.sales) * 100 : 0;
+
+    return {
+      grossProfitLoss,
+      totalOverhead,
+      adjustedProfitLoss,
+      adjustedMargin,
+    };
+  }, [filteredTotals, reportOverheadTotals]);
+
+  const departmentContributionRows = useMemo(() => {
+    return departmentOptions
+      .map((department) => {
+        const departmentJobs = filteredJobs.filter((job) => job.department === department);
+        const departmentJobTotals = totalsForJobs(departmentJobs);
+        const departmentOverhead = reportDepartmentOverheadMap[department] || 0;
+        const adjustedContribution = departmentJobTotals.profitLoss - departmentOverhead;
+
+        return {
+          department,
+          sales: departmentJobTotals.sales,
+          expenses: departmentJobTotals.totalExpenses,
+          grossProfitLoss: departmentJobTotals.profitLoss,
+          overhead: departmentOverhead,
+          adjustedContribution,
+        };
+      })
+      .filter(
+        (row) =>
+          row.sales !== 0 ||
+          row.expenses !== 0 ||
+          row.grossProfitLoss !== 0 ||
+          row.overhead !== 0
+      );
+  }, [filteredJobs, reportDepartmentOverheadMap]);
+
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
   const activeOverheadEntry =
     overheadEntries.find((entry) => entry.id === editingOverheadId) || null;
@@ -1180,22 +1293,21 @@ export default function App() {
   };
 
   const exportReport = () => {
-    const report = filteredJobs.map((job) => {
-      const calc = calculateJob(job);
-      return {
-        jobNumber: job.jobNumber,
-        customer: job.customer,
-        description: job.description,
-        department: job.department,
-        status: job.status,
-        reviewedByManagement: !!job.reviewedByManagement,
-        sales: calc.sales,
-        totalExpenses: calc.totalExpenses,
-        profitLoss: calc.profitLoss,
-        margin: Number(calc.margin.toFixed(2)),
-        lineCount: job.lines.length,
-      };
-    });
+    const report = adjustedReportRows.map((row) => ({
+      jobNumber: row.job.jobNumber,
+      customer: row.job.customer,
+      description: row.job.description,
+      department: row.job.department,
+      status: row.job.status,
+      reviewedByManagement: !!row.job.reviewedByManagement,
+      sales: row.calc.sales,
+      totalExpenses: row.calc.totalExpenses,
+      grossProfitLoss: row.calc.profitLoss,
+      allocatedOverhead: row.allocatedOverhead,
+      adjustedProfitLoss: row.adjustedProfitLoss,
+      adjustedMargin: Number(row.adjustedMargin.toFixed(2)),
+      lineCount: row.job.lines.length,
+    }));
 
     exportJson("profit-loss-report.json", report);
   };
@@ -1363,16 +1475,24 @@ export default function App() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-sm font-bold uppercase tracking-[0.24em] text-sky-200">
-                {activeTab === "overhead" ? "Department Overhead Tracking" : "Job + Change Order Tracking"}
+                {activeTab === "overhead"
+                  ? "Department Overhead Tracking"
+                  : activeTab === "reports"
+                  ? "Adjusted Profitability Reporting"
+                  : "Job + Change Order Tracking"}
               </div>
               <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
                 {activeTab === "overhead"
                   ? "Non-Billable Department Costs and Overhead Reporting"
+                  : activeTab === "reports"
+                  ? "Gross vs Adjusted Profitability After Overhead"
                   : "Main Job P&L and Change Order P&L in One App"}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200 md:text-base">
                 {activeTab === "overhead"
                   ? "Track time off, benefits, donations, safety supplies, shirts, PCs, office purchases, and other non-billable costs by department."
+                  : activeTab === "reports"
+                  ? "Show management how overhead changes each job, each department, and the overall bottom line."
                   : "Create a parent job, add change orders under the same job, track separate profitability for each line, and view rolled-up totals for the full project."}
               </p>
             </div>
@@ -1612,30 +1732,38 @@ export default function App() {
           </>
         ) : activeTab === "reports" ? (
           <div className="space-y-6">
-            <div className="no-print grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <StatCard title="Report Jobs" value={String(filteredJobs.length)} />
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                title="Report Sales"
-                value={formatCurrency(filteredTotals.sales)}
-              />
-              <StatCard
-                title={
-                  departmentFilter === "All Departments"
-                    ? "Filtered Profit / Loss (All)"
-                    : `${departmentFilter} Profit / Loss`
+                title="Gross Profit / Loss"
+                value={formatCurrency(adjustedReportTotals.grossProfitLoss)}
+                accent={
+                  adjustedReportTotals.grossProfitLoss >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
                 }
-                value={formatCurrency(filteredTotals.profitLoss)}
-                accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
               <StatCard
-                title="Filtered Margin"
-                value={formatPercent(filteredMargin)}
-                accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"}
-              />
-              <StatCard
-                title="Filtered Freight % of Materials"
-                value={formatPercent(filteredFreightPct)}
+                title="Total Overhead"
+                value={formatCurrency(adjustedReportTotals.totalOverhead)}
                 accent="text-amber-600"
+              />
+              <StatCard
+                title="Adjusted Profit / Loss"
+                value={formatCurrency(adjustedReportTotals.adjustedProfitLoss)}
+                accent={
+                  adjustedReportTotals.adjustedProfitLoss >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }
+              />
+              <StatCard
+                title="Adjusted Margin"
+                value={formatPercent(adjustedReportTotals.adjustedMargin)}
+                accent={
+                  adjustedReportTotals.adjustedMargin >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }
               />
             </div>
 
@@ -1643,7 +1771,7 @@ export default function App() {
               <div className="report-print-company">Northeast Data</div>
               <div className="report-print-title">{reportTitle}</div>
               <div className="report-print-subtitle">
-                Project profitability summary by job
+                Gross vs adjusted profitability after allocated overhead
               </div>
 
               <div className="report-print-meta">
@@ -1665,25 +1793,33 @@ export default function App() {
                 </div>
 
                 <div className="report-print-meta-item">
-                  <div className="report-print-label">Sales</div>
-                  <div className="report-print-value">{formatCurrency(filteredTotals.sales)}</div>
+                  <div className="report-print-label">Gross P&L</div>
+                  <div className="report-print-value">
+                    {formatCurrency(adjustedReportTotals.grossProfitLoss)}
+                  </div>
                 </div>
               </div>
 
               <div className="report-print-meta">
                 <div className="report-print-meta-item">
-                  <div className="report-print-label">Profit / Loss</div>
-                  <div className="report-print-value">{formatCurrency(filteredTotals.profitLoss)}</div>
+                  <div className="report-print-label">Overhead</div>
+                  <div className="report-print-value">
+                    {formatCurrency(adjustedReportTotals.totalOverhead)}
+                  </div>
                 </div>
 
                 <div className="report-print-meta-item">
-                  <div className="report-print-label">Margin</div>
-                  <div className="report-print-value">{formatPercent(filteredMargin)}</div>
+                  <div className="report-print-label">Adjusted P&L</div>
+                  <div className="report-print-value">
+                    {formatCurrency(adjustedReportTotals.adjustedProfitLoss)}
+                  </div>
                 </div>
 
                 <div className="report-print-meta-item">
-                  <div className="report-print-label">Freight % of Materials</div>
-                  <div className="report-print-value">{formatPercent(filteredFreightPct)}</div>
+                  <div className="report-print-label">Adjusted Margin</div>
+                  <div className="report-print-value">
+                    {formatPercent(adjustedReportTotals.adjustedMargin)}
+                  </div>
                 </div>
 
                 <div className="report-print-meta-item">
@@ -1695,10 +1831,10 @@ export default function App() {
 
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-4 text-xl font-bold text-slate-900 no-print">
-                Job Profitability Report
+                Adjusted Job Profitability Report
               </div>
               <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full text-sm">
+                <table className="min-w-[1900px] text-sm">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
                       <th className="px-4 py-3 text-left font-bold">Job #</th>
@@ -1708,95 +1844,157 @@ export default function App() {
                       <th className="px-4 py-3 text-center font-bold">Reviewed</th>
                       <th className="px-4 py-3 text-right font-bold">Sales</th>
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
-                      <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
-                      <th className="px-4 py-3 text-right font-bold">Margin</th>
+                      <th className="px-4 py-3 text-right font-bold">Gross P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Allocated Overhead</th>
+                      <th className="px-4 py-3 text-right font-bold">Adjusted P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Adjusted Margin</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredJobs.map((job) => {
-                      const calc = calculateJob(job);
-                      return (
-                        <React.Fragment key={job.id}>
-                          <tr className="border-t-2 border-slate-400 bg-slate-100">
-                            <td className="px-4 py-3 font-extrabold text-slate-900">
-                              {job.jobNumber || "—"}
-                              <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                                Job Total
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-900">
-                              {job.customer || "—"}
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-900">
-                              {job.description || "—"}
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-slate-900">
-                              {job.department || "—"}
-                            </td>
-                            <td className="px-4 py-3 text-center font-bold text-slate-900">
-                              {job.reviewedByManagement ? "✓" : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-right font-extrabold text-slate-900">
-                              {formatCurrency(calc.sales)}
-                            </td>
-                            <td className="px-4 py-3 text-right font-extrabold text-slate-900">
-                              {formatCurrency(calc.totalExpenses)}
-                            </td>
-                            <td
-                              className={`px-4 py-3 text-right font-extrabold ${
-                                calc.profitLoss >= 0 ? "text-emerald-700" : "text-red-700"
-                              }`}
+                    {adjustedReportRows.map((row) => (
+                      <React.Fragment key={row.job.id}>
+                        <tr className="border-t-2 border-slate-400 bg-slate-100">
+                          <td className="px-4 py-3 font-extrabold text-slate-900">
+                            {row.job.jobNumber || "—"}
+                            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                              Job Total
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            {row.job.customer || "—"}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            {row.job.description || "—"}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            {row.job.department || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-slate-900">
+                            {row.job.reviewedByManagement ? "✓" : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right font-extrabold text-slate-900">
+                            {formatCurrency(row.calc.sales)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-extrabold text-slate-900">
+                            {formatCurrency(row.calc.totalExpenses)}
+                          </td>
+                          <td
+                            className={`px-4 py-3 text-right font-extrabold ${
+                              row.calc.profitLoss >= 0 ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            {formatCurrency(row.calc.profitLoss)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-extrabold text-amber-700">
+                            {formatCurrency(row.allocatedOverhead)}
+                          </td>
+                          <td
+                            className={`px-4 py-3 text-right font-extrabold ${
+                              row.adjustedProfitLoss >= 0 ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            {formatCurrency(row.adjustedProfitLoss)}
+                          </td>
+                          <td
+                            className={`px-4 py-3 text-right font-extrabold ${
+                              row.adjustedMargin >= 0 ? "text-emerald-700" : "text-red-700"
+                            }`}
+                          >
+                            {formatPercent(row.adjustedMargin)}
+                          </td>
+                        </tr>
+
+                        {row.job.lines.map((line) => {
+                          const lineCalc = calculateLine(line);
+                          return (
+                            <tr
+                              key={line.id}
+                              className="border-t border-slate-100 bg-slate-50/70 text-slate-600"
                             >
-                              {formatCurrency(calc.profitLoss)}
-                            </td>
-                            <td
-                              className={`px-4 py-3 text-right font-extrabold ${
-                                calc.margin >= 0 ? "text-emerald-700" : "text-red-700"
-                              }`}
-                            >
-                              {formatPercent(calc.margin)}
-                            </td>
-                          </tr>
-                          {job.lines.map((line) => {
-                            const lineCalc = calculateLine(line);
-                            return (
-                              <tr
-                                key={line.id}
-                                className="border-t border-slate-100 bg-slate-50/70 text-slate-600"
+                              <td className="px-4 py-2 pl-8 text-xs font-semibold uppercase tracking-[0.08em]">
+                                {line.type === "main" ? "Main Job Detail" : "Change Order"}
+                              </td>
+                              <td className="px-4 py-2 text-xs">{line.itemNumber || "—"}</td>
+                              <td className="px-4 py-2 text-xs">{line.description || "—"}</td>
+                              <td className="px-4 py-2 text-xs">{row.job.department || "—"}</td>
+                              <td className="px-4 py-2 text-center text-xs">—</td>
+                              <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.sales)}</td>
+                              <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.totalExpenses)}</td>
+                              <td
+                                className={`px-4 py-2 text-right text-xs font-semibold ${
+                                  lineCalc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
+                                }`}
                               >
-                                <td className="px-4 py-2 pl-8 text-xs font-semibold uppercase tracking-[0.08em]">
-                                  {line.type === "main" ? "Main Job Detail" : "Change Order"}
-                                </td>
-                                <td className="px-4 py-2 text-xs">{line.itemNumber || "—"}</td>
-                                <td className="px-4 py-2 text-xs">{line.description || "—"}</td>
-                                <td className="px-4 py-2 text-xs">{job.department || "—"}</td>
-                                <td className="px-4 py-2 text-center text-xs">—</td>
-                                <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.sales)}</td>
-                                <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.totalExpenses)}</td>
-                                <td
-                                  className={`px-4 py-2 text-right text-xs font-semibold ${
-                                    lineCalc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
-                                  }`}
-                                >
-                                  {formatCurrency(lineCalc.profitLoss)}
-                                </td>
-                                <td
-                                  className={`px-4 py-2 text-right text-xs font-semibold ${
-                                    lineCalc.margin >= 0 ? "text-emerald-600" : "text-red-600"
-                                  }`}
-                                >
-                                  {formatPercent(lineCalc.margin)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </React.Fragment>
-                      );
-                    })}
-                    {filteredJobs.length === 0 ? (
+                                {formatCurrency(lineCalc.profitLoss)}
+                              </td>
+                              <td className="px-4 py-2 text-right text-xs">—</td>
+                              <td className="px-4 py-2 text-right text-xs">—</td>
+                              <td className="px-4 py-2 text-right text-xs">—</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+
+                    {adjustedReportRows.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                        <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                           No jobs found for this report.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 text-xl font-bold text-slate-900">
+                Department Contribution Summary
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
+                      <th className="px-4 py-3 text-right font-bold">Sales</th>
+                      <th className="px-4 py-3 text-right font-bold">Expenses</th>
+                      <th className="px-4 py-3 text-right font-bold">Gross P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Overhead</th>
+                      <th className="px-4 py-3 text-right font-bold">Adjusted Contribution</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {departmentContributionRows.map((row) => (
+                      <tr key={row.department} className="border-t border-slate-200 bg-white">
+                        <td className="px-4 py-3 font-semibold text-slate-900">{row.department}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(row.sales)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(row.expenses)}</td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.grossProfitLoss >= 0 ? "text-emerald-600" : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(row.grossProfitLoss)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-amber-700">
+                          {formatCurrency(row.overhead)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.adjustedContribution >= 0
+                              ? "text-emerald-700"
+                              : "text-red-700"
+                          }`}
+                        >
+                          {formatCurrency(row.adjustedContribution)}
+                        </td>
+                      </tr>
+                    ))}
+                    {departmentContributionRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                          No department contribution data found.
                         </td>
                       </tr>
                     ) : null}
