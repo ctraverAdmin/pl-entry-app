@@ -177,6 +177,7 @@ function createBlankJob() {
     description: "",
     department: "Installation",
     status: "Open",
+    reviewedByManagement: false,
     lines: [emptyLine("main", "MAIN")],
     createdAt: new Date().toISOString(),
   };
@@ -443,6 +444,21 @@ function JobEditorModal({ job, onClose, onSave }) {
                 onChange={(e) => updateJobField("customer", e.target.value)}
                 placeholder="Customer name"
               />
+
+              <div className="flex items-end">
+                <label className="flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.reviewedByManagement}
+                    onChange={(e) =>
+                      updateJobField("reviewedByManagement", e.target.checked)
+                    }
+                    className="h-4 w-4"
+                  />
+                  Reviewed by Management
+                </label>
+              </div>
+
               <Textarea
                 label="Job Description"
                 value={draft.description}
@@ -792,6 +808,7 @@ export default function App() {
         description: job.description,
         department: job.department,
         status: job.status,
+        reviewedByManagement: !!job.reviewedByManagement,
         sales: calc.sales,
         totalExpenses: calc.totalExpenses,
         profitLoss: calc.profitLoss,
@@ -1084,6 +1101,7 @@ export default function App() {
                       <th className="px-4 py-3 text-left font-bold">Description</th>
                       <th className="px-4 py-3 text-left font-bold">Department</th>
                       <th className="px-4 py-3 text-left font-bold">Status</th>
+                      <th className="px-4 py-3 text-center font-bold">Reviewed</th>
                       <th className="px-4 py-3 text-right font-bold">Sales</th>
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
                       <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
@@ -1105,6 +1123,15 @@ export default function App() {
                           <td className="max-w-[320px] truncate px-4 py-3">{job.description || "—"}</td>
                           <td className="px-4 py-3">{job.department || "—"}</td>
                           <td className="px-4 py-3">{job.status || "—"}</td>
+                          <td className="px-4 py-3 text-center">
+                            {job.reviewedByManagement ? (
+                              <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
+                                ✓
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
                           <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
                           <td
@@ -1155,7 +1182,7 @@ export default function App() {
                     })}
                     {filteredJobs.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
+                        <td colSpan={13} className="px-4 py-10 text-center text-slate-500">
                           No jobs found.
                         </td>
                       </tr>
@@ -1260,6 +1287,7 @@ export default function App() {
                       <th className="px-4 py-3 text-left font-bold">Customer</th>
                       <th className="px-4 py-3 text-left font-bold">Description</th>
                       <th className="px-4 py-3 text-left font-bold">Department</th>
+                      <th className="px-4 py-3 text-center font-bold">Reviewed</th>
                       <th className="px-4 py-3 text-right font-bold">Sales</th>
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
                       <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
@@ -1286,6 +1314,9 @@ export default function App() {
                             </td>
                             <td className="px-4 py-3 font-semibold text-slate-900">
                               {job.department || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold text-slate-900">
+                              {job.reviewedByManagement ? "✓" : "—"}
                             </td>
                             <td className="px-4 py-3 text-right font-extrabold text-slate-900">
                               {formatCurrency(calc.sales)}
@@ -1321,6 +1352,7 @@ export default function App() {
                                 <td className="px-4 py-2 text-xs">{line.itemNumber || "—"}</td>
                                 <td className="px-4 py-2 text-xs">{line.description || "—"}</td>
                                 <td className="px-4 py-2 text-xs">{job.department || "—"}</td>
+                                <td className="px-4 py-2 text-center text-xs">—</td>
                                 <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.sales)}</td>
                                 <td className="px-4 py-2 text-right text-xs">{formatCurrency(lineCalc.totalExpenses)}</td>
                                 <td
@@ -1345,7 +1377,7 @@ export default function App() {
                     })}
                     {filteredJobs.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                        <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                           No jobs found for this report.
                         </td>
                       </tr>
