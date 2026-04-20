@@ -3,21 +3,41 @@ import {
   BarChart3,
   Briefcase,
   FileText,
+  Laptop,
   Pencil,
   Plus,
   Save,
   Search,
+  Shield,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 
 const STORAGE_KEY = "pl_entry_jobs_v5";
+const OVERHEAD_STORAGE_KEY = "pl_entry_overhead_v1";
+
 const departmentOptions = [
   "Installation",
   "Design",
   "Network",
   "Sales",
   "Network Integration",
+];
+
+const overheadCategoryOptions = [
+  "Time Off / PTO",
+  "Benefits",
+  "Payroll Taxes",
+  "Bonuses",
+  "Training",
+  "Donations / Sponsorships",
+  "Safety Supplies",
+  "General Supplies",
+  "Shirts / Apparel",
+  "PCs / Equipment",
+  "Office Expenses",
+  "Miscellaneous Overhead",
 ];
 
 const expenseGroups = [
@@ -128,6 +148,76 @@ function totalsForJobs(jobList) {
   );
 }
 
+function totalsForOverhead(entries) {
+  return entries.reduce(
+    (acc, entry) => {
+      const amount = toNumber(entry.amount);
+      acc.total += amount;
+
+      if (
+        [
+          "Time Off / PTO",
+          "Benefits",
+          "Payroll Taxes",
+          "Bonuses",
+          "Training",
+        ].includes(entry.category)
+      ) {
+        acc.people += amount;
+      } else if (
+        [
+          "Safety Supplies",
+          "General Supplies",
+          "Shirts / Apparel",
+          "PCs / Equipment",
+          "Office Expenses",
+        ].includes(entry.category)
+      ) {
+        acc.operating += amount;
+      } else {
+        acc.other += amount;
+      }
+
+      const now = new Date();
+      const entryDate = entry.date ? new Date(entry.date) : null;
+
+      if (entryDate && !Number.isNaN(entryDate.getTime())) {
+        if (
+          entryDate.getMonth() === now.getMonth() &&
+          entryDate.getFullYear() === now.getFullYear()
+        ) {
+          acc.currentMonth += amount;
+        }
+
+        if (entryDate.getFullYear() === now.getFullYear()) {
+          acc.ytd += amount;
+        }
+      }
+
+      return acc;
+    },
+    {
+      total: 0,
+      people: 0,
+      operating: 0,
+      other: 0,
+      currentMonth: 0,
+      ytd: 0,
+    }
+  );
+}
+
+function overheadByDepartment(entries) {
+  return departmentOptions.map((department) => {
+    const departmentEntries = entries.filter((entry) => entry.department === department);
+    const total = departmentEntries.reduce((sum, entry) => sum + toNumber(entry.amount), 0);
+    return {
+      department,
+      total,
+    };
+  });
+}
+
 function emptyLine(type = "main", itemNumber = "") {
   return {
     id: uid(),
@@ -179,6 +269,24 @@ function createBlankJob() {
     status: "Open",
     reviewedByManagement: false,
     lines: [emptyLine("main", "MAIN")],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function createBlankOverheadEntry() {
+  return {
+    id: uid(),
+    date: "",
+    department: "Installation",
+    category: "",
+    subcategory: "",
+    description: "",
+    vendor: "",
+    employeeName: "",
+    amount: "",
+    notes: "",
+    reviewedByManagement: false,
+    recurring: false,
     createdAt: new Date().toISOString(),
   };
 }
@@ -329,11 +437,14 @@ function Button({ children, className = "", variant = "primary", ...props }) {
   );
 }
 
-function StatCard({ title, value, accent = "text-slate-900" }) {
+function StatCard({ title, value, accent = "text-slate-900", icon = null }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-        {title}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+          {title}
+        </div>
+        {icon}
       </div>
       <div className={`mt-2 text-2xl font-bold ${accent}`}>{value}</div>
     </div>
@@ -688,12 +799,175 @@ function JobEditorModal({ job, onClose, onSave }) {
   );
 }
 
+function OverheadEntryModal({ entry, onClose, onSave }) {
+  const [draft, setDraft] = useState(() => JSON.parse(JSON.stringify(entry)));
+
+  useEffect(() => {
+    setDraft(JSON.parse(JSON.stringify(entry)));
+  }, [entry]);
+
+  const updateField = (key, value) => {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/55 p-4 md:p-8">
+      <div className="w-full max-w-5xl rounded-[28px] border border-slate-200 bg-slate-50 shadow-2xl">
+        <div className="flex items-center justify-between rounded-t-[28px] border-b border-slate-200 bg-white px-6 py-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-sky-700">
+              Overhead Workspace
+            </div>
+            <div className="mt-1 text-2xl font-bold text-slate-900">
+              {draft.description || "New Overhead Entry"}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => onSave(draft)}>
+              <Save className="h-4 w-4" /> Save Entry
+            </Button>
+            <Button variant="ghost" onClick={onClose}>
+              <X className="h-4 w-4" /> Close
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-6 p-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 text-lg font-bold text-slate-900">Overhead Entry</div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Input
+                label="Date"
+                type="date"
+                value={draft.date}
+                onChange={(e) => updateField("date", e.target.value)}
+              />
+              <Select
+                label="Department"
+                value={draft.department}
+                onChange={(e) => updateField("department", e.target.value)}
+              >
+                {departmentOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Category"
+                value={draft.category}
+                onChange={(e) => updateField("category", e.target.value)}
+              >
+                <option value="">Select Category</option>
+                {overheadCategoryOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="Amount"
+                type="number"
+                step="0.01"
+                value={draft.amount}
+                onChange={(e) => updateField("amount", e.target.value)}
+                placeholder="0.00"
+              />
+
+              <Input
+                label="Subcategory"
+                value={draft.subcategory}
+                onChange={(e) => updateField("subcategory", e.target.value)}
+                placeholder="Health Insurance, Shirts, Laptop..."
+              />
+              <Input
+                label="Vendor"
+                value={draft.vendor}
+                onChange={(e) => updateField("vendor", e.target.value)}
+                placeholder="Vendor name"
+              />
+              <Input
+                label="Employee Name"
+                value={draft.employeeName}
+                onChange={(e) => updateField("employeeName", e.target.value)}
+                placeholder="Employee name"
+              />
+              <div className="flex items-end">
+                <label className="flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.reviewedByManagement}
+                    onChange={(e) => updateField("reviewedByManagement", e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Reviewed by Management
+                </label>
+              </div>
+
+              <div className="flex items-end">
+                <label className="flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.recurring}
+                    onChange={(e) => updateField("recurring", e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Recurring
+                </label>
+              </div>
+
+              <Textarea
+                label="Description"
+                value={draft.description}
+                onChange={(e) => updateField("description", e.target.value)}
+                placeholder="Explain this overhead item"
+                className="md:col-span-2 lg:col-span-3"
+              />
+              <Textarea
+                label="Notes"
+                value={draft.notes}
+                onChange={(e) => updateField("notes", e.target.value)}
+                placeholder="Additional notes"
+                className="md:col-span-2 lg:col-span-4"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Amount" value={formatCurrency(draft.amount)} />
+            <StatCard title="Department" value={draft.department || "—"} />
+            <StatCard title="Category" value={draft.category || "—"} />
+            <StatCard
+              title="Reviewed"
+              value={draft.reviewedByManagement ? "Yes" : "No"}
+              accent={draft.reviewedByManagement ? "text-emerald-600" : "text-slate-900"}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [jobs, setJobs] = useState([]);
+  const [overheadEntries, setOverheadEntries] = useState([]);
+
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All Departments");
+
+  const [overheadSearch, setOverheadSearch] = useState("");
+  const [overheadDepartmentFilter, setOverheadDepartmentFilter] =
+    useState("All Departments");
+  const [overheadCategoryFilter, setOverheadCategoryFilter] =
+    useState("All Categories");
+  const [overheadMonthFilter, setOverheadMonthFilter] = useState("All Months");
+  const [overheadYearFilter, setOverheadYearFilter] =
+    useState(String(new Date().getFullYear()));
+
   const [activeTab, setActiveTab] = useState("jobs");
   const [editingJobId, setEditingJobId] = useState(null);
+  const [editingOverheadId, setEditingOverheadId] = useState(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -718,6 +992,24 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
   }, [jobs]);
 
+  useEffect(() => {
+    const raw = localStorage.getItem(OVERHEAD_STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setOverheadEntries(parsed);
+        }
+      } catch (error) {
+        console.error("Failed to load overhead entries", error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(OVERHEAD_STORAGE_KEY, JSON.stringify(overheadEntries));
+  }, [overheadEntries]);
+
   const filteredJobs = useMemo(() => {
     const term = search.toLowerCase().trim();
     return jobs.filter((job) => {
@@ -734,13 +1026,74 @@ export default function App() {
     });
   }, [jobs, search, departmentFilter]);
 
-  const overallTotals = useMemo(() => {
-    return totalsForJobs(jobs);
-  }, [jobs]);
+  const filteredOverheadEntries = useMemo(() => {
+    return overheadEntries.filter((entry) => {
+      const matchesDepartment =
+        overheadDepartmentFilter === "All Departments" ||
+        entry.department === overheadDepartmentFilter;
 
-  const filteredTotals = useMemo(() => {
-    return totalsForJobs(filteredJobs);
-  }, [filteredJobs]);
+      const matchesCategory =
+        overheadCategoryFilter === "All Categories" ||
+        entry.category === overheadCategoryFilter;
+
+      const entryDate = entry.date ? new Date(entry.date) : null;
+      const entryMonth =
+        entryDate && !Number.isNaN(entryDate.getTime())
+          ? String(entryDate.getMonth() + 1).padStart(2, "0")
+          : "";
+      const entryYear =
+        entryDate && !Number.isNaN(entryDate.getTime())
+          ? String(entryDate.getFullYear())
+          : "";
+
+      const matchesMonth =
+        overheadMonthFilter === "All Months" || entryMonth === overheadMonthFilter;
+
+      const matchesYear =
+        overheadYearFilter === "All Years" || entryYear === overheadYearFilter;
+
+      const term = overheadSearch.toLowerCase().trim();
+      const matchesSearch =
+        term === "" ||
+        [
+          entry.description,
+          entry.subcategory,
+          entry.vendor,
+          entry.employeeName,
+          entry.notes,
+          entry.category,
+          entry.department,
+        ].some((value) => String(value || "").toLowerCase().includes(term));
+
+      return (
+        matchesDepartment &&
+        matchesCategory &&
+        matchesMonth &&
+        matchesYear &&
+        matchesSearch
+      );
+    });
+  }, [
+    overheadEntries,
+    overheadDepartmentFilter,
+    overheadCategoryFilter,
+    overheadMonthFilter,
+    overheadYearFilter,
+    overheadSearch,
+  ]);
+
+  const overallTotals = useMemo(() => totalsForJobs(jobs), [jobs]);
+  const filteredTotals = useMemo(() => totalsForJobs(filteredJobs), [filteredJobs]);
+
+  const overheadTotals = useMemo(
+    () => totalsForOverhead(filteredOverheadEntries),
+    [filteredOverheadEntries]
+  );
+
+  const departmentOverheadSummary = useMemo(
+    () => overheadByDepartment(filteredOverheadEntries),
+    [filteredOverheadEntries]
+  );
 
   const overallMargin =
     overallTotals.sales > 0 ? (overallTotals.profitLoss / overallTotals.sales) * 100 : 0;
@@ -759,6 +1112,8 @@ export default function App() {
   );
 
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
+  const activeOverheadEntry =
+    overheadEntries.find((entry) => entry.id === editingOverheadId) || null;
 
   const createJob = () => {
     const newJob = createBlankJob();
@@ -788,12 +1143,37 @@ export default function App() {
     });
   };
 
+  const createOverheadEntry = () => {
+    const newEntry = createBlankOverheadEntry();
+    setOverheadEntries((prev) => [newEntry, ...prev]);
+    setEditingOverheadId(newEntry.id);
+  };
+
+  const saveOverheadEntry = (updatedEntry) => {
+    setOverheadEntries((prev) =>
+      prev.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry))
+    );
+    setEditingOverheadId(null);
+  };
+
+  const deleteOverheadEntry = (entryId) => {
+    if (!window.confirm("Delete this overhead entry?")) return;
+    setOverheadEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+  };
+
   const exportAll = () => {
     exportJson("profit-loss-jobs.json", jobs);
   };
 
   const printReport = () => {
     setActiveTab("reports");
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  const printOverheadReport = () => {
+    setActiveTab("overhead");
     setTimeout(() => {
       window.print();
     }, 150);
@@ -820,10 +1200,19 @@ export default function App() {
     exportJson("profit-loss-report.json", report);
   };
 
+  const exportOverheadReport = () => {
+    exportJson("overhead-report.json", filteredOverheadEntries);
+  };
+
   const reportTitle =
     departmentFilter === "All Departments"
       ? "Profitability Report"
       : `${departmentFilter} Profitability Report`;
+
+  const overheadReportTitle =
+    overheadDepartmentFilter === "All Departments"
+      ? "Department Overhead Report"
+      : `${overheadDepartmentFilter} Overhead Report`;
 
   const printedOn = new Date().toLocaleString();
 
@@ -956,6 +1345,12 @@ export default function App() {
             >
               <BarChart3 className="h-4 w-4" /> Reports
             </Button>
+            <Button
+              variant={activeTab === "overhead" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("overhead")}
+            >
+              <FileText className="h-4 w-4" /> Overhead
+            </Button>
             <Button variant="secondary" onClick={exportAll}>
               <FileText className="h-4 w-4" /> Export Jobs
             </Button>
@@ -968,28 +1363,51 @@ export default function App() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-sm font-bold uppercase tracking-[0.24em] text-sky-200">
-                Job + Change Order Tracking
+                {activeTab === "overhead" ? "Department Overhead Tracking" : "Job + Change Order Tracking"}
               </div>
               <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
-                Main Job P&amp;L and Change Order P&amp;L in One App
+                {activeTab === "overhead"
+                  ? "Non-Billable Department Costs and Overhead Reporting"
+                  : "Main Job P&L and Change Order P&L in One App"}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200 md:text-base">
-                Create a parent job, add change orders under the same job, track separate profitability for each line, and view rolled-up totals for the full project.
+                {activeTab === "overhead"
+                  ? "Track time off, benefits, donations, safety supplies, shirts, PCs, office purchases, and other non-billable costs by department."
+                  : "Create a parent job, add change orders under the same job, track separate profitability for each line, and view rolled-up totals for the full project."}
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={createJob}>
-                <Plus className="h-4 w-4" /> New Job
-              </Button>
-              <Button variant="secondary" onClick={printReport}>
-                Print Report
-              </Button>
-              <Button
-                className="bg-white text-slate-900 hover:bg-slate-200"
-                onClick={exportReport}
-              >
-                <Save className="h-4 w-4" /> Export Report
-              </Button>
+              {activeTab === "overhead" ? (
+                <>
+                  <Button variant="secondary" onClick={createOverheadEntry}>
+                    <Plus className="h-4 w-4" /> New Overhead Entry
+                  </Button>
+                  <Button variant="secondary" onClick={printOverheadReport}>
+                    Print Overhead Report
+                  </Button>
+                  <Button
+                    className="bg-white text-slate-900 hover:bg-slate-200"
+                    onClick={exportOverheadReport}
+                  >
+                    <Save className="h-4 w-4" /> Export Overhead
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" onClick={createJob}>
+                    <Plus className="h-4 w-4" /> New Job
+                  </Button>
+                  <Button variant="secondary" onClick={printReport}>
+                    Print Report
+                  </Button>
+                  <Button
+                    className="bg-white text-slate-900 hover:bg-slate-200"
+                    onClick={exportReport}
+                  >
+                    <Save className="h-4 w-4" /> Export Report
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1192,7 +1610,7 @@ export default function App() {
               </div>
             </div>
           </>
-        ) : (
+        ) : activeTab === "reports" ? (
           <div className="space-y-6">
             <div className="no-print grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <StatCard title="Report Jobs" value={String(filteredJobs.length)} />
@@ -1387,6 +1805,259 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                title="Total Overhead"
+                value={formatCurrency(overheadTotals.total)}
+                icon={<FileText className="h-4 w-4 text-slate-400" />}
+              />
+              <StatCard
+                title="People Costs"
+                value={formatCurrency(overheadTotals.people)}
+                icon={<Users className="h-4 w-4 text-slate-400" />}
+              />
+              <StatCard
+                title="Operating Costs"
+                value={formatCurrency(overheadTotals.operating)}
+                icon={<Laptop className="h-4 w-4 text-slate-400" />}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                title="Donations / Other"
+                value={formatCurrency(overheadTotals.other)}
+                icon={<Shield className="h-4 w-4 text-slate-400" />}
+              />
+              <StatCard
+                title="Current Month"
+                value={formatCurrency(overheadTotals.currentMonth)}
+              />
+              <StatCard
+                title="Year to Date"
+                value={formatCurrency(overheadTotals.ytd)}
+              />
+            </div>
+
+            <div className="print-only report-print-header">
+              <div className="report-print-company">Northeast Data</div>
+              <div className="report-print-title">{overheadReportTitle}</div>
+              <div className="report-print-subtitle">
+                Non-billable overhead and department cost summary
+              </div>
+
+              <div className="report-print-meta">
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Department</div>
+                  <div className="report-print-value">
+                    {overheadDepartmentFilter === "All Departments"
+                      ? "All Departments"
+                      : overheadDepartmentFilter}
+                  </div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Printed</div>
+                  <div className="report-print-value">{printedOn}</div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Entries</div>
+                  <div className="report-print-value">{filteredOverheadEntries.length}</div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Total Overhead</div>
+                  <div className="report-print-value">{formatCurrency(overheadTotals.total)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm no-print">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-xl font-bold text-slate-900">Overhead Entries</div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    Track PTO, benefits, donations, shirts, safety supplies, PCs, office costs, and other non-billable expenses by department.
+                  </div>
+                </div>
+
+                <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
+                  <div className="min-w-[200px]">
+                    <Select
+                      value={overheadDepartmentFilter}
+                      onChange={(e) => setOverheadDepartmentFilter(e.target.value)}
+                    >
+                      <option value="All Departments">All Departments</option>
+                      {departmentOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="min-w-[220px]">
+                    <Select
+                      value={overheadCategoryFilter}
+                      onChange={(e) => setOverheadCategoryFilter(e.target.value)}
+                    >
+                      <option value="All Categories">All Categories</option>
+                      {overheadCategoryOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="min-w-[150px]">
+                    <Select
+                      value={overheadMonthFilter}
+                      onChange={(e) => setOverheadMonthFilter(e.target.value)}
+                    >
+                      <option value="All Months">All Months</option>
+                      {Array.from({ length: 12 }).map((_, index) => {
+                        const value = String(index + 1).padStart(2, "0");
+                        return (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        );
+                      })}
+                    </Select>
+                  </div>
+
+                  <div className="min-w-[150px]">
+                    <Select
+                      value={overheadYearFilter}
+                      onChange={(e) => setOverheadYearFilter(e.target.value)}
+                    >
+                      <option value="All Years">All Years</option>
+                      {["2024", "2025", "2026", "2027", "2028"].map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="relative w-full lg:w-[320px]">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={overheadSearch}
+                      onChange={(e) => setOverheadSearch(e.target.value)}
+                      placeholder="Search overhead..."
+                      className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 text-xl font-bold text-slate-900 no-print">
+                Department Overhead Detail
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-[1700px] text-sm">
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-bold">Date</th>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
+                      <th className="px-4 py-3 text-left font-bold">Category</th>
+                      <th className="px-4 py-3 text-left font-bold">Subcategory</th>
+                      <th className="px-4 py-3 text-left font-bold">Description</th>
+                      <th className="px-4 py-3 text-left font-bold">Vendor</th>
+                      <th className="px-4 py-3 text-left font-bold">Employee</th>
+                      <th className="px-4 py-3 text-center font-bold">Reviewed</th>
+                      <th className="px-4 py-3 text-right font-bold">Amount</th>
+                      <th className="px-4 py-3 text-center font-bold no-print">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOverheadEntries.map((entry) => (
+                      <tr key={entry.id} className="border-t border-slate-200 bg-white hover:bg-slate-50">
+                        <td className="px-4 py-3">{entry.date || "—"}</td>
+                        <td className="px-4 py-3">{entry.department || "—"}</td>
+                        <td className="px-4 py-3">{entry.category || "—"}</td>
+                        <td className="px-4 py-3">{entry.subcategory || "—"}</td>
+                        <td className="max-w-[320px] truncate px-4 py-3">{entry.description || "—"}</td>
+                        <td className="px-4 py-3">{entry.vendor || "—"}</td>
+                        <td className="px-4 py-3">{entry.employeeName || "—"}</td>
+                        <td className="px-4 py-3 text-center">
+                          {entry.reviewedByManagement ? "✓" : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                          {formatCurrency(entry.amount)}
+                        </td>
+                        <td className="px-4 py-3 no-print">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              className="rounded-lg p-2 text-slate-500 hover:bg-sky-50 hover:text-sky-700"
+                              onClick={() => setEditingOverheadId(entry.id)}
+                              title="Edit"
+                              type="button"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              className="rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => deleteOverheadEntry(entry.id)}
+                              title="Delete"
+                              type="button"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredOverheadEntries.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                          No overhead entries found.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 text-xl font-bold text-slate-900">
+                Department Overhead Summary
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
+                      <th className="px-4 py-3 text-right font-bold">Total Overhead</th>
+                      <th className="px-4 py-3 text-right font-bold">% of Total Overhead</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {departmentOverheadSummary.map((row) => {
+                      const pct =
+                        overheadTotals.total > 0 ? (row.total / overheadTotals.total) * 100 : 0;
+
+                      return (
+                        <tr key={row.department} className="border-t border-slate-200 bg-white">
+                          <td className="px-4 py-3 font-semibold text-slate-900">{row.department}</td>
+                          <td className="px-4 py-3 text-right">{formatCurrency(row.total)}</td>
+                          <td className="px-4 py-3 text-right">{formatPercent(pct)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1395,6 +2066,14 @@ export default function App() {
           job={activeJob}
           onClose={() => setEditingJobId(null)}
           onSave={saveJob}
+        />
+      ) : null}
+
+      {activeOverheadEntry ? (
+        <OverheadEntryModal
+          entry={activeOverheadEntry}
+          onClose={() => setEditingOverheadId(null)}
+          onSave={saveOverheadEntry}
         />
       ) : null}
     </div>
