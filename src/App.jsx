@@ -777,7 +777,10 @@ export default function App() {
   };
 
   const printReport = () => {
-    window.print();
+    setActiveTab("reports");
+    setTimeout(() => {
+      window.print();
+    }, 150);
   };
 
   const exportReport = () => {
@@ -802,7 +805,7 @@ export default function App() {
 
   const reportTitle =
     departmentFilter === "All Departments"
-      ? "Overall Profitability Report"
+      ? "Profitability Report"
       : `${departmentFilter} Profitability Report`;
 
   const printedOn = new Date().toLocaleString();
@@ -816,7 +819,7 @@ export default function App() {
 
         @media print {
           body {
-            background: white !important;
+            background: #ffffff !important;
           }
 
           .no-print {
@@ -827,19 +830,34 @@ export default function App() {
             display: block !important;
           }
 
+          .print-page {
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
           .report-print-header {
-            margin-bottom: 18px;
-            border: 1px solid #cbd5e1;
-            border-radius: 14px;
-            padding: 18px 20px;
+            display: block !important;
+            margin: 0 0 18px 0;
+            padding: 0 0 14px 0;
+            border-bottom: 2px solid #cbd5e1;
             background: #ffffff;
           }
 
+          .report-print-company {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #334155;
+            margin-bottom: 8px;
+          }
+
           .report-print-title {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 700;
             color: #0f172a;
             margin-bottom: 6px;
+            line-height: 1.2;
           }
 
           .report-print-subtitle {
@@ -850,16 +868,15 @@ export default function App() {
 
           .report-print-meta {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 14px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 10px;
           }
 
-          .report-print-meta-box {
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            padding: 10px 12px;
-            background: #f8fafc;
+          .report-print-meta-item {
+            padding: 0;
+            border: none;
+            background: transparent;
           }
 
           .report-print-label {
@@ -868,26 +885,13 @@ export default function App() {
             letter-spacing: 0.12em;
             text-transform: uppercase;
             color: #64748b;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
           }
 
           .report-print-value {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             color: #0f172a;
-          }
-
-          .report-print-summary {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-          }
-
-          .report-print-summary-box {
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            padding: 10px 12px;
-            background: #ffffff;
           }
 
           table {
@@ -911,7 +915,7 @@ export default function App() {
         }
       `}</style>
 
-      <div className="border-b border-slate-200 bg-white">
+      <div className="border-b border-slate-200 bg-white no-print">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between md:px-8">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-sky-700">
@@ -942,8 +946,8 @@ export default function App() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[2200px] space-y-6 p-4 md:p-8">
-        <div className="rounded-[28px] bg-gradient-to-r from-slate-950 via-slate-900 to-sky-900 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] md:p-8">
+      <div className="mx-auto max-w-[2200px] space-y-6 p-4 md:p-8 print-page">
+        <div className="rounded-[28px] bg-gradient-to-r from-slate-950 via-slate-900 to-sky-900 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] md:p-8 no-print">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-sm font-bold uppercase tracking-[0.24em] text-sky-200">
@@ -1126,7 +1130,7 @@ export default function App() {
                     })}
                     {filteredJobs.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
+                        <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
                           No jobs found.
                         </td>
                       </tr>
@@ -1145,7 +1149,11 @@ export default function App() {
                 value={formatCurrency(filteredTotals.sales)}
               />
               <StatCard
-                title={departmentFilter === "All Departments" ? "Filtered Profit / Loss (All)" : `${departmentFilter} Profit / Loss`}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Filtered Profit / Loss (All)"
+                    : `${departmentFilter} Profit / Loss`
+                }
                 value={formatCurrency(filteredTotals.profitLoss)}
                 accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
@@ -1162,47 +1170,55 @@ export default function App() {
             </div>
 
             <div className="print-only report-print-header">
-              <div className="report-print-title">Northeast Data</div>
-              <div className="report-print-subtitle">{reportTitle}</div>
+              <div className="report-print-company">Northeast Data</div>
+              <div className="report-print-title">{reportTitle}</div>
+              <div className="report-print-subtitle">
+                Project profitability summary by job
+              </div>
 
               <div className="report-print-meta">
-                <div className="report-print-meta-box">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Department</div>
                   <div className="report-print-value">
                     {departmentFilter === "All Departments" ? "All Departments" : departmentFilter}
                   </div>
                 </div>
 
-                <div className="report-print-meta-box">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Printed</div>
                   <div className="report-print-value">{printedOn}</div>
                 </div>
 
-                <div className="report-print-meta-box">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Jobs</div>
                   <div className="report-print-value">{filteredJobs.length}</div>
                 </div>
-              </div>
 
-              <div className="report-print-summary">
-                <div className="report-print-summary-box">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Sales</div>
                   <div className="report-print-value">{formatCurrency(filteredTotals.sales)}</div>
                 </div>
+              </div>
 
-                <div className="report-print-summary-box">
+              <div className="report-print-meta">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Profit / Loss</div>
                   <div className="report-print-value">{formatCurrency(filteredTotals.profitLoss)}</div>
                 </div>
 
-                <div className="report-print-summary-box">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Margin</div>
                   <div className="report-print-value">{formatPercent(filteredMargin)}</div>
                 </div>
 
-                <div className="report-print-summary-box">
+                <div className="report-print-meta-item">
                   <div className="report-print-label">Freight % of Materials</div>
                   <div className="report-print-value">{formatPercent(filteredFreightPct)}</div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Status</div>
+                  <div className="report-print-value">Final</div>
                 </div>
               </div>
             </div>
@@ -1287,6 +1303,13 @@ export default function App() {
                         </React.Fragment>
                       );
                     })}
+                    {filteredJobs.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                          No jobs found for this report.
+                        </td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>
