@@ -979,12 +979,27 @@ export default function App() {
 
         {activeTab === "jobs" ? (
           <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <StatCard title="Visible Jobs" value={String(filteredJobs.length)} />
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 title={
                   departmentFilter === "All Departments"
-                    ? "Overall Profit / Loss"
+                    ? "Total Sales"
+                    : `${departmentFilter} Sales`
+                }
+                value={formatCurrency(filteredTotals.sales)}
+              />
+              <StatCard
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Total Expenses"
+                    : `${departmentFilter} Expenses`
+                }
+                value={formatCurrency(filteredTotals.totalExpenses)}
+              />
+              <StatCard
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Total Profit / Loss"
                     : `${departmentFilter} Profit / Loss`
                 }
                 value={formatCurrency(filteredTotals.profitLoss)}
@@ -993,43 +1008,37 @@ export default function App() {
               <StatCard
                 title={
                   departmentFilter === "All Departments"
-                    ? "Overall Freight % of Materials"
-                    : `${departmentFilter} Freight % of Materials`
-                }
-                value={formatPercent(filteredFreightPct)}
-                accent="text-amber-600"
-              />
-              <StatCard
-                title={
-                  departmentFilter === "All Departments"
-                    ? "Overall Margin"
-                    : `${departmentFilter} Margin`
+                    ? "Total Margin %"
+                    : `${departmentFilter} Margin %`
                 }
                 value={formatPercent(filteredMargin)}
                 accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"}
-              />
-              <StatCard
-                title={
-                  departmentFilter === "All Departments"
-                    ? "Filtered Profit / Loss (All)"
-                    : `${departmentFilter} Profit / Loss`
-                }
-                value={formatCurrency(filteredTotals.profitLoss)}
-                accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <StatCard
-                title={departmentFilter === "All Departments" ? "Filtered Materials" : `${departmentFilter} Materials`}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Total Materials"
+                    : `${departmentFilter} Materials`
+                }
                 value={formatCurrency(filteredTotals.materials)}
               />
               <StatCard
-                title={departmentFilter === "All Departments" ? "Filtered Freight" : `${departmentFilter} Freight`}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Total Freight"
+                    : `${departmentFilter} Freight`
+                }
                 value={formatCurrency(filteredTotals.freightDelivery)}
               />
               <StatCard
-                title={departmentFilter === "All Departments" ? "Filtered Freight % of Materials" : `${departmentFilter} Freight % of Materials`}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Total Freight % of Materials"
+                    : `${departmentFilter} Freight % of Materials`
+                }
                 value={formatPercent(filteredFreightPct)}
                 accent="text-amber-600"
               />
