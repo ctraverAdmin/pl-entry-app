@@ -982,22 +982,38 @@ export default function App() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <StatCard title="Visible Jobs" value={String(filteredJobs.length)} />
               <StatCard
-                title="Overall Profit / Loss"
-                value={formatCurrency(overallTotals.profitLoss)}
-                accent={overallTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Overall Profit / Loss"
+                    : `${departmentFilter} Profit / Loss`
+                }
+                value={formatCurrency(filteredTotals.profitLoss)}
+                accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
               <StatCard
-                title="Overall Freight % of Materials"
-                value={formatPercent(overallFreightPct)}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Overall Freight % of Materials"
+                    : `${departmentFilter} Freight % of Materials`
+                }
+                value={formatPercent(filteredFreightPct)}
                 accent="text-amber-600"
               />
               <StatCard
-                title="Overall Margin"
-                value={formatPercent(overallMargin)}
-                accent={overallMargin >= 0 ? "text-emerald-600" : "text-red-600"}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Overall Margin"
+                    : `${departmentFilter} Margin`
+                }
+                value={formatPercent(filteredMargin)}
+                accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"}
               />
               <StatCard
-                title={departmentFilter === "All Departments" ? "Filtered Profit / Loss (All)" : `${departmentFilter} Profit / Loss`}
+                title={
+                  departmentFilter === "All Departments"
+                    ? "Filtered Profit / Loss (All)"
+                    : `${departmentFilter} Profit / Loss`
+                }
                 value={formatCurrency(filteredTotals.profitLoss)}
                 accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
               />
@@ -1246,23 +1262,38 @@ export default function App() {
                       const calc = calculateJob(job);
                       return (
                         <React.Fragment key={job.id}>
-                          <tr className="border-t border-slate-200 bg-white">
-                            <td className="px-4 py-3 font-semibold text-slate-900">{job.jobNumber || "—"}</td>
-                            <td className="px-4 py-3">{job.customer || "—"}</td>
-                            <td className="px-4 py-3">{job.description || "—"}</td>
-                            <td className="px-4 py-3">{job.department || "—"}</td>
-                            <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
-                            <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
+                          <tr className="border-t-2 border-slate-400 bg-slate-100">
+                            <td className="px-4 py-3 font-extrabold text-slate-900">
+                              {job.jobNumber || "—"}
+                              <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                                Job Total
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">
+                              {job.customer || "—"}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">
+                              {job.description || "—"}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">
+                              {job.department || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right font-extrabold text-slate-900">
+                              {formatCurrency(calc.sales)}
+                            </td>
+                            <td className="px-4 py-3 text-right font-extrabold text-slate-900">
+                              {formatCurrency(calc.totalExpenses)}
+                            </td>
                             <td
-                              className={`px-4 py-3 text-right font-semibold ${
-                                calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
+                              className={`px-4 py-3 text-right font-extrabold ${
+                                calc.profitLoss >= 0 ? "text-emerald-700" : "text-red-700"
                               }`}
                             >
                               {formatCurrency(calc.profitLoss)}
                             </td>
                             <td
-                              className={`px-4 py-3 text-right font-semibold ${
-                                calc.margin >= 0 ? "text-emerald-600" : "text-red-600"
+                              className={`px-4 py-3 text-right font-extrabold ${
+                                calc.margin >= 0 ? "text-emerald-700" : "text-red-700"
                               }`}
                             >
                               {formatPercent(calc.margin)}
@@ -1276,7 +1307,7 @@ export default function App() {
                                 className="border-t border-slate-100 bg-slate-50/70 text-slate-600"
                               >
                                 <td className="px-4 py-2 pl-8 text-xs font-semibold uppercase tracking-[0.08em]">
-                                  {line.type === "main" ? "Main Job" : "Change Order"}
+                                  {line.type === "main" ? "Main Job Detail" : "Change Order"}
                                 </td>
                                 <td className="px-4 py-2 text-xs">{line.itemNumber || "—"}</td>
                                 <td className="px-4 py-2 text-xs">{line.description || "—"}</td>
