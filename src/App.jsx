@@ -96,6 +96,13 @@ function formatPercent(value) {
   return `${Number(value || 0).toFixed(2)}%`;
 }
 
+function freightPercentOfMaterials(freight, materials) {
+  const freightValue = toNumber(freight);
+  const materialsValue = toNumber(materials);
+  if (materialsValue <= 0) return 0;
+  return (freightValue / materialsValue) * 100;
+}
+
 function emptyLine(type = "main", itemNumber = "") {
   return {
     id: uid(),
@@ -565,6 +572,35 @@ function JobEditorModal({ job, onClose, onSave }) {
                     onChange={(e) => updateLineField(selectedLine.id, "description", e.target.value)}
                     placeholder="Describe the main job or change order"
                     className="md:col-span-2 lg:col-span-4"
+                  />
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <StatCard
+                    title="Total Materials"
+                    value={formatCurrency(toNumber(selectedLine.materials))}
+                  />
+                  <StatCard
+                    title="Total Freight & Delivery"
+                    value={formatCurrency(toNumber(selectedLine.freightDelivery))}
+                  />
+                  <StatCard
+                    title="Materials + Freight Total"
+                    value={formatCurrency(
+                      toNumber(selectedLine.materials) +
+                        toNumber(selectedLine.freightDelivery)
+                    )}
+                    accent="text-slate-900"
+                  />
+                  <StatCard
+                    title="Freight as % of Materials"
+                    value={formatPercent(
+                      freightPercentOfMaterials(
+                        selectedLine.freightDelivery,
+                        selectedLine.materials
+                      )
+                    )}
+                    accent="text-amber-600"
                   />
                 </div>
 
