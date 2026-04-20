@@ -943,6 +943,7 @@ export default function App() {
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
                       <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
                       <th className="px-4 py-3 text-right font-bold">Margin</th>
+                      <th className="px-4 py-3 text-right font-bold">Freight % on Materials</th>
                       <th className="px-4 py-3 text-center font-bold">COs</th>
                       <th className="px-4 py-3 text-center font-bold">Actions</th>
                     </tr>
@@ -974,6 +975,14 @@ export default function App() {
                             }`}
                           >
                             {formatPercent(calc.margin)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-amber-600">
+                            {formatPercent(
+                              freightPercentOfMaterials(
+                                job.lines.reduce((sum, line) => sum + toNumber(line.freightDelivery), 0),
+                                job.lines.reduce((sum, line) => sum + toNumber(line.materials), 0)
+                              )
+                            )}
                           </td>
                           <td className="px-4 py-3 text-center">{coCount}</td>
                           <td className="px-4 py-3">
