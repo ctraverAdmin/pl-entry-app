@@ -247,6 +247,151 @@ function calculateAllocatedOverhead(job, departmentSalesMap, departmentOverheadM
   return departmentOverhead * (jobSales / departmentSales);
 }
 
+function mapQuickBooksCategory(accountName) {
+  const name = String(accountName || "").toLowerCase();
+
+  if (
+    name.includes("pto") ||
+    name.includes("paid time off") ||
+    name.includes("vacation") ||
+    name.includes("sick")
+  ) {
+    return "Time Off / PTO";
+  }
+  if (
+    name.includes("benefit") ||
+    name.includes("insurance") ||
+    name.includes("health")
+  ) {
+    return "Benefits";
+  }
+  if (
+    name.includes("payroll tax") ||
+    name.includes("fica") ||
+    name.includes("futa") ||
+    name.includes("suta")
+  ) {
+    return "Payroll Taxes";
+  }
+  if (name.includes("bonus")) {
+    return "Bonuses";
+  }
+  if (name.includes("training") || name.includes("education")) {
+    return "Training";
+  }
+  if (
+    name.includes("donation") ||
+    name.includes("contribution") ||
+    name.includes("charit") ||
+    name.includes("sponsor")
+  ) {
+    return "Donations / Sponsorships";
+  }
+  if (name.includes("safety")) {
+    return "Safety Supplies";
+  }
+  if (
+    name.includes("shirt") ||
+    name.includes("uniform") ||
+    name.includes("apparel")
+  ) {
+    return "Shirts / Apparel";
+  }
+  if (
+    name.includes("computer") ||
+    name.includes("pc") ||
+    name.includes("laptop") ||
+    name.includes("monitor") ||
+    name.includes("equipment")
+  ) {
+    return "PCs / Equipment";
+  }
+  if (name.includes("office")) {
+    return "Office Expenses";
+  }
+  if (name.includes("supplies") || name.includes("general supplies")) {
+    return "General Supplies";
+  }
+
+  return "Miscellaneous Overhead";
+}
+
+function parseQuickBooksAmount(value) {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+
+  const negativeByParens = text.startsWith("(") && text.endsWith(")");
+  const cleaned = text.replace(/[$,\(\)]/g, "").trim();
+  const amount = parseFloat(cleaned);
+
+  if (!Number.isFinite(amount)) return 0;
+  return negativeByParens ? -amount : amount;
+}
+
+function parseQuickBooksPaste(rawText, department, entryDate) {
+  const lines = String(rawText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const ignoredPatterns = [
+    /^total\b/i,
+    /^net income\b/i,
+    /^ordinary income/i,
+    /^ordinary expenses/i,
+    /^income\b/i,
+    /^expenses\b/i,
+    /^gross profit\b/i,
+  ];
+
+  const results = [];
+
+  for (const line of lines) {
+    if (ignoredPatterns.some((pattern) => pattern.test(line))) continue;
+
+    const tabParts = line
+      .split("\t")
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    let accountName = "";
+    let amountText = "";
+
+    if (tabParts.length >= 2) {
+      accountName = tabParts[0];
+      amountText = tabParts[tabParts.length - 1];
+    } else {
+      const match = line.match(/^(.*?)(-?\$?\(?[\d,]+(?:\.\d{2})?\)?)$/);
+      if (!match) continue;
+      accountName = match[1].trim();
+      amountText = match[2].trim();
+    }
+
+    if (!accountName || !amountText) continue;
+
+    const amount = parseQuickBooksAmount(amountText);
+    if (!Number.isFinite(amount) || amount === 0) continue;
+
+    results.push({
+      id: uid(),
+      date: entryDate,
+      department,
+      category: mapQuickBooksCategory(accountName),
+      subcategory: accountName,
+      description: accountName,
+      vendor: "",
+      employeeName: "",
+      amount: String(Math.abs(amount)),
+      notes: "Imported from QuickBooks P&L paste",
+      reviewedByManagement: false,
+      recurring: false,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  return results;
+}
+
 function emptyLine(type = "main", itemNumber = "") {
   return {
     id: uid(),
@@ -376,7 +521,8 @@ function calculateForecastForJob(job, departmentForecastSalesMap, departmentOver
     source = "Closed Job Actual";
   } else if (estimatedFinalSales > 0 || estimatedFinalExpenses > 0) {
     forecastSales = estimatedFinalSales > 0 ? estimatedFinalSales : actual.sales;
-    forecastExpenses = estimatedFinalExpenses > 0 ? estimatedFinalExpenses : actual.totalExpenses;
+    forecastExpenses =
+      estimatedFinalExpenses > 0 ? estimatedFinalExpenses : actual.totalExpenses;
     source = "Forecast Estimate";
   }
 
@@ -1121,6 +1267,13 @@ export default function App() {
   const [forecastConfidenceFilter, setForecastConfidenceFilter] =
     useState("All Confidence");
 
+  const [showQbPasteModal, setShowQbPasteModal] = useState(false);
+  const [qbPasteText, setQbPasteText] = useState("");
+  const [qbPasteDepartment, setQbPasteDepartment] = useState("Installation");
+  const [qbPasteDate, setQbPasteDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+
   const [activeTab, setActiveTab] = useState("jobs");
   const [editingJobId, setEditingJobId] = useState(null);
   const [editingOverheadId, setEditingOverheadId] = useState(null);
@@ -1502,6 +1655,10 @@ export default function App() {
       );
   }, [forecastRows]);
 
+  const qbPastePreviewRows = useMemo(() => {
+    return parseQuickBooksPaste(qbPasteText, qbPasteDepartment, qbPasteDate);
+  }, [qbPasteText, qbPasteDepartment, qbPasteDate]);
+
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
   const activeOverheadEntry =
     overheadEntries.find((entry) => entry.id === editingOverheadId) || null;
@@ -1550,6 +1707,20 @@ export default function App() {
   const deleteOverheadEntry = (entryId) => {
     if (!window.confirm("Delete this overhead entry?")) return;
     setOverheadEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+  };
+
+  const importQuickBooksPaste = () => {
+    const rows = parseQuickBooksPaste(qbPasteText, qbPasteDepartment, qbPasteDate);
+
+    if (!rows.length) {
+      window.alert("No QuickBooks lines were recognized from the pasted report.");
+      return;
+    }
+
+    setOverheadEntries((prev) => [...rows, ...prev]);
+    setQbPasteText("");
+    setShowQbPasteModal(false);
+    setActiveTab("overhead");
   };
 
   const exportAll = () => {
@@ -1828,6 +1999,9 @@ export default function App() {
                 <>
                   <Button variant="secondary" onClick={createOverheadEntry}>
                     <Plus className="h-4 w-4" /> New Overhead Entry
+                  </Button>
+                  <Button variant="secondary" onClick={() => setShowQbPasteModal(true)}>
+                    Paste QuickBooks P&amp;L
                   </Button>
                   <Button variant="secondary" onClick={printOverheadReport}>
                     Print Overhead Report
@@ -2930,6 +3104,106 @@ export default function App() {
           onClose={() => setEditingOverheadId(null)}
           onSave={saveOverheadEntry}
         />
+      ) : null}
+
+      {showQbPasteModal ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/55 p-4 md:p-8">
+          <div className="w-full max-w-6xl rounded-[28px] border border-slate-200 bg-slate-50 shadow-2xl">
+            <div className="flex items-center justify-between rounded-t-[28px] border-b border-slate-200 bg-white px-6 py-4">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-sky-700">
+                  QuickBooks Import
+                </div>
+                <div className="mt-1 text-2xl font-bold text-slate-900">
+                  Paste QuickBooks P&amp;L
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={importQuickBooksPaste}>
+                  <Save className="h-4 w-4" /> Import Entries
+                </Button>
+                <Button variant="ghost" onClick={() => setShowQbPasteModal(false)}>
+                  <X className="h-4 w-4" /> Close
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-6 p-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <Select
+                  label="Department"
+                  value={qbPasteDepartment}
+                  onChange={(e) => setQbPasteDepartment(e.target.value)}
+                >
+                  {departmentOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </Select>
+
+                <Input
+                  label="Entry Date"
+                  type="date"
+                  value={qbPasteDate}
+                  onChange={(e) => setQbPasteDate(e.target.value)}
+                />
+
+                <StatCard
+                  title="Preview Rows"
+                  value={String(qbPastePreviewRows.length)}
+                />
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <Textarea
+                  label="Paste QuickBooks P&L Here"
+                  value={qbPasteText}
+                  onChange={(e) => setQbPasteText(e.target.value)}
+                  placeholder={`Example:
+Employee Benefits\t1,250.00
+Payroll Taxes\t845.22
+Office Supplies\t212.44
+Charitable Contributions\t500.00`}
+                  className="min-h-[260px]"
+                />
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 text-lg font-bold text-slate-900">Import Preview</div>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-100 text-slate-700">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-bold">QB Account</th>
+                        <th className="px-4 py-3 text-left font-bold">Mapped Category</th>
+                        <th className="px-4 py-3 text-left font-bold">Department</th>
+                        <th className="px-4 py-3 text-right font-bold">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {qbPastePreviewRows.map((row) => (
+                        <tr key={row.id} className="border-t border-slate-200 bg-white">
+                          <td className="px-4 py-3">{row.subcategory || "—"}</td>
+                          <td className="px-4 py-3">{row.category || "—"}</td>
+                          <td className="px-4 py-3">{row.department || "—"}</td>
+                          <td className="px-4 py-3 text-right">{formatCurrency(row.amount)}</td>
+                        </tr>
+                      ))}
+                      {qbPastePreviewRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                            Paste QuickBooks P&amp;L lines above to preview the import.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
