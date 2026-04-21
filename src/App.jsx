@@ -1196,7 +1196,13 @@ export default function App() {
     setActiveTab("overhead");
   };
 
-  const addDepartmentEmployee = () => setDepartmentEmployees((prev) => [createBlankDepartmentEmployee(), ...prev]);
+  const addDepartmentEmployee = () => {
+    const newEmployee = createBlankDepartmentEmployee();
+    if (burdenDepartmentFilter !== "All Departments") {
+      newEmployee.department = burdenDepartmentFilter;
+    }
+    setDepartmentEmployees((prev) => [newEmployee, ...prev]);
+  };
   const updateDepartmentEmployee = (id, key, value) => setDepartmentEmployees((prev) => prev.map((employee) => employee.id === id ? { ...employee, [key]: value } : employee));
   const deleteDepartmentEmployee = (id) => {
     if (!window.confirm("Delete this employee burden record?")) return;
@@ -1208,14 +1214,26 @@ export default function App() {
     }
   };
 
-  const addDepartmentAssignment = () => setDepartmentAssignments((prev) => [createBlankDepartmentAssignment(), ...prev]);
+  const addDepartmentAssignment = () => {
+    const newAssignment = createBlankDepartmentAssignment();
+    if (burdenDepartmentFilter !== "All Departments") {
+      newAssignment.department = burdenDepartmentFilter;
+    }
+    setDepartmentAssignments((prev) => [newAssignment, ...prev]);
+  };
   const updateDepartmentAssignment = (id, key, value) => setDepartmentAssignments((prev) => prev.map((assignment) => assignment.id === id ? { ...assignment, [key]: value } : assignment));
   const deleteDepartmentAssignment = (id) => {
     if (!window.confirm("Delete this assignment?")) return;
     setDepartmentAssignments((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const addNonBillableHour = () => setNonBillableHours((prev) => [createBlankNonBillableHour(), ...prev]);
+  const addNonBillableHour = () => {
+    const newEntry = createBlankNonBillableHour();
+    if (burdenDepartmentFilter !== "All Departments") {
+      newEntry.department = burdenDepartmentFilter;
+    }
+    setNonBillableHours((prev) => [newEntry, ...prev]);
+  };
   const updateNonBillableHour = (id, key, value) => setNonBillableHours((prev) => prev.map((entry) => entry.id === id ? { ...entry, [key]: value } : entry));
   const deleteNonBillableHour = (id) => {
     if (!window.confirm("Delete this non-billable hour entry?")) return;
