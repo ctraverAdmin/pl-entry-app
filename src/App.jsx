@@ -365,6 +365,7 @@ function createBlankJob() {
     department: "Installation",
     status: "Open",
     reviewedByManagement: false,
+    totalBidCost: "",
     estimatedFinalSales: "",
     estimatedFinalExpenses: "",
     percentComplete: "",
@@ -645,6 +646,8 @@ function JobEditorModal({ job, onClose, onSave }) {
 
   const selectedLine = draft.lines.find((line) => line.id === selectedLineId) || draft.lines[0] || null;
   const jobTotals = calculateJob(draft);
+  const totalBidCostValue = toNumber(draft.totalBidCost);
+  const salesCompletionPct = totalBidCostValue > 0 ? (jobTotals.sales / totalBidCostValue) * 100 : 0;
 
   const updateJobField = (key, value) => setDraft((prev) => ({ ...prev, [key]: value }));
   const updateLineField = (lineId, key, value) => {
@@ -695,6 +698,7 @@ function JobEditorModal({ job, onClose, onSave }) {
               </Select>
               <Input label="Status" value={draft.status} onChange={(e) => updateJobField("status", e.target.value)} placeholder="Open" />
               <Input label="Customer" value={draft.customer} onChange={(e) => updateJobField("customer", e.target.value)} placeholder="Customer name" />
+              <Input label="Total Bid Cost" type="number" step="0.01" value={draft.totalBidCost ?? ""} onChange={(e) => updateJobField("totalBidCost", e.target.value)} placeholder="0.00" />
               <div className="flex items-end">
                 <label className="flex w-full items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
                   <input type="checkbox" checked={!!draft.reviewedByManagement} onChange={(e) => updateJobField("reviewedByManagement", e.target.checked)} className="h-4 w-4" />
@@ -752,11 +756,12 @@ function JobEditorModal({ job, onClose, onSave }) {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <StatCard title="Job Sales" value={formatCurrency(jobTotals.sales)} />
+            <StatCard title="Total Bid Cost" value={formatCurrency(draft.totalBidCost)} />
+            <StatCard title="% Complete by Sales" value={formatPercent(salesCompletionPct)} accent="text-sky-700" />
             <StatCard title="Job Expenses" value={formatCurrency(jobTotals.totalExpenses)} />
             <StatCard title="Job Profit / Loss" value={formatCurrency(jobTotals.profitLoss)} accent={jobTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"} />
-            <StatCard title="Job Margin" value={formatPercent(jobTotals.margin)} accent={jobTotals.margin >= 0 ? "text-emerald-600" : "text-red-600"} />
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -981,7 +986,7 @@ export default function App() {
   const filteredJobs = useMemo(() => {
     const term = search.toLowerCase().trim();
     return jobs.filter((job) => {
-      const matchesSearch = term === "" || [job.jobNumber, job.customer, job.description, job.status, job.department].some((value) => String(value || "").toLowerCase().includes(term));
+      const matchesSearch = term === "" || [job.jobNumber, job.customer, job.description, job.status, job.department, job.totalBidCost].some((value) => String(value || "").toLowerCase().includes(term));
       const matchesDepartment = departmentFilter === "All Departments" || (job.department || "") === departmentFilter;
       return matchesSearch && matchesDepartment;
     });
@@ -1003,6 +1008,15 @@ export default function App() {
   }, [overheadEntries, overheadDepartmentFilter, overheadCategoryFilter, overheadMonthFilter, overheadYearFilter, overheadSearch]);
 
   const overallTotals = useMemo(() => totalsForJobs(jobs), [jobs]);
+
+  const jobsWithCompletion = useMemo(() => {
+    return filteredJobs.map((job) => {
+      const calc = calculateJob(job);
+      const totalBidCost = toNumber(job.totalBidCost);
+      const percentCompleteBySales = totalBidCost > 0 ? (calc.sales / totalBidCost) * 100 : 0;
+      return { job, calc, totalBidCost, percentCompleteBySales };
+    });
+  }, [filteredJobs]);
   const filteredTotals = useMemo(() => totalsForJobs(filteredJobs), [filteredJobs]);
   const overheadTotals = useMemo(() => totalsForOverhead(filteredOverheadEntries), [filteredOverheadEntries]);
   const departmentOverheadSummary = useMemo(() => overheadByDepartment(filteredOverheadEntries), [filteredOverheadEntries]);
@@ -1317,6 +1331,11 @@ export default function App() {
       adjustedProfitLoss: row.adjustedProfitLoss,
       adjustedMargin: Number(row.adjustedMargin.toFixed(2)),
       lineCount: row.job.lines.length,
+      totalBidCost: toNumber(row.job.totalBidCost),
+      percentCompleteBySales:
+        toNumber(row.job.totalBidCost) > 0
+          ? Number(((row.calc.sales / toNumber(row.job.totalBidCost)) * 100).toFixed(2))
+          : 0,
     }));
     exportJson("profit-loss-report.json", report);
   };
@@ -1495,7 +1514,7 @@ export default function App() {
                 </div>
               </div>
               <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-[1700px] text-sm">
+                <table className="min-w-[1950px] text-sm">
                   <thead className="bg-slate-100 text-slate-700">
                     <tr>
                       <th className="px-4 py-3 text-left font-bold">Job #</th>
@@ -1505,6 +1524,8 @@ export default function App() {
                       <th className="px-4 py-3 text-left font-bold">Status</th>
                       <th className="px-4 py-3 text-center font-bold">Reviewed</th>
                       <th className="px-4 py-3 text-right font-bold">Sales</th>
+                      <th className="px-4 py-3 text-right font-bold">Total Bid Cost</th>
+                      <th className="px-4 py-3 text-right font-bold">% Complete by Sales</th>
                       <th className="px-4 py-3 text-right font-bold">Expenses</th>
                       <th className="px-4 py-3 text-right font-bold">P&amp;L</th>
                       <th className="px-4 py-3 text-right font-bold">Margin</th>
@@ -1514,8 +1535,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredJobs.map((job) => {
-                      const calc = calculateJob(job);
+                    {jobsWithCompletion.map(({ job, calc, totalBidCost, percentCompleteBySales }) => {
                       const coCount = job.lines.filter((line) => line.type === "changeOrder").length;
                       return (
                         <tr key={job.id} className="border-t border-slate-200 bg-white hover:bg-slate-50">
@@ -1526,6 +1546,8 @@ export default function App() {
                           <td className="px-4 py-3">{job.status || "—"}</td>
                           <td className="px-4 py-3 text-center">{job.reviewedByManagement ? <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">✓</span> : <span className="text-slate-300">—</span>}</td>
                           <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-sky-700">{formatCurrency(totalBidCost)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-sky-700">{formatPercent(percentCompleteBySales)}</td>
                           <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(calc.profitLoss)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${calc.margin >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatPercent(calc.margin)}</td>
@@ -1535,7 +1557,7 @@ export default function App() {
                         </tr>
                       );
                     })}
-                    {filteredJobs.length === 0 ? <tr><td colSpan={13} className="px-4 py-10 text-center text-slate-500">No jobs found.</td></tr> : null}
+                    {filteredJobs.length === 0 ? <tr><td colSpan={15} className="px-4 py-10 text-center text-slate-500">No jobs found.</td></tr> : null}
                   </tbody>
                 </table>
               </div>
