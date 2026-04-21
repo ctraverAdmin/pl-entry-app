@@ -40,6 +40,8 @@ const overheadCategoryOptions = [
   "Miscellaneous Overhead",
 ];
 
+const forecastConfidenceOptions = ["High", "Medium", "Low"];
+
 const expenseGroups = [
   {
     title: "Materials & Job Costs",
@@ -295,6 +297,11 @@ function createBlankJob() {
     department: "Installation",
     status: "Open",
     reviewedByManagement: false,
+    estimatedFinalSales: "",
+    estimatedFinalExpenses: "",
+    percentComplete: "",
+    forecastConfidence: "Medium",
+    forecastNotes: "",
     lines: [emptyLine("main", "MAIN")],
     createdAt: new Date().toISOString(),
   };
@@ -350,6 +357,56 @@ function calculateJob(job) {
   return {
     ...totals,
     margin: totals.sales > 0 ? (totals.profitLoss / totals.sales) * 100 : 0,
+  };
+}
+
+function calculateForecastForJob(job, departmentForecastSalesMap, departmentOverheadMap) {
+  const actual = calculateJob(job);
+  const estimatedFinalSales = toNumber(job.estimatedFinalSales);
+  const estimatedFinalExpenses = toNumber(job.estimatedFinalExpenses);
+  const isClosed = String(job.status || "").toLowerCase() === "closed";
+
+  let forecastSales = actual.sales;
+  let forecastExpenses = actual.totalExpenses;
+  let source = "Actual To Date";
+
+  if (isClosed) {
+    forecastSales = actual.sales;
+    forecastExpenses = actual.totalExpenses;
+    source = "Closed Job Actual";
+  } else if (estimatedFinalSales > 0 || estimatedFinalExpenses > 0) {
+    forecastSales = estimatedFinalSales > 0 ? estimatedFinalSales : actual.sales;
+    forecastExpenses = estimatedFinalExpenses > 0 ? estimatedFinalExpenses : actual.totalExpenses;
+    source = "Forecast Estimate";
+  }
+
+  const projectedFinalGrossProfitLoss = forecastSales - forecastExpenses;
+  const dept = job.department || "Unknown";
+  const departmentForecastSales = departmentForecastSalesMap[dept] || 0;
+  const departmentOverhead = departmentOverheadMap[dept] || 0;
+
+  const allocatedOverhead =
+    departmentForecastSales > 0 && departmentOverhead > 0 && forecastSales > 0
+      ? departmentOverhead * (forecastSales / departmentForecastSales)
+      : 0;
+
+  const projectedFinalAdjustedProfitLoss =
+    projectedFinalGrossProfitLoss - allocatedOverhead;
+
+  const projectedFinalAdjustedMargin =
+    forecastSales > 0 ? (projectedFinalAdjustedProfitLoss / forecastSales) * 100 : 0;
+
+  return {
+    actualSales: actual.sales,
+    actualExpenses: actual.totalExpenses,
+    actualGrossProfitLoss: actual.profitLoss,
+    forecastSales,
+    forecastExpenses,
+    projectedFinalGrossProfitLoss,
+    allocatedOverhead,
+    projectedFinalAdjustedProfitLoss,
+    projectedFinalAdjustedMargin,
+    source,
   };
 }
 
@@ -476,6 +533,12 @@ function StatCard({ title, value, accent = "text-slate-900", icon = null }) {
       <div className={`mt-2 text-2xl font-bold ${accent}`}>{value}</div>
     </div>
   );
+}
+
+function confidenceAccent(confidence) {
+  if (confidence === "High") return "text-emerald-700";
+  if (confidence === "Low") return "text-red-700";
+  return "text-amber-700";
 }
 
 function JobEditorModal({ job, onClose, onSave }) {
@@ -652,7 +715,9 @@ function JobEditorModal({ job, onClose, onSave }) {
                           {line.description || "—"}
                         </td>
                         <td className="px-4 py-3 text-right">{formatCurrency(calc.sales)}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrency(calc.totalExpenses)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {formatCurrency(calc.totalExpenses)}
+                        </td>
                         <td
                           className={`px-4 py-3 text-right font-semibold ${
                             calc.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"
@@ -707,6 +772,57 @@ function JobEditorModal({ job, onClose, onSave }) {
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 text-lg font-bold text-slate-900">
+              Forecast / Year-End Projection
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Input
+                label="Estimated Final Sales"
+                type="number"
+                step="0.01"
+                value={draft.estimatedFinalSales ?? ""}
+                onChange={(e) => updateJobField("estimatedFinalSales", e.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                label="Estimated Final Expenses"
+                type="number"
+                step="0.01"
+                value={draft.estimatedFinalExpenses ?? ""}
+                onChange={(e) => updateJobField("estimatedFinalExpenses", e.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                label="Percent Complete"
+                type="number"
+                step="0.01"
+                value={draft.percentComplete ?? ""}
+                onChange={(e) => updateJobField("percentComplete", e.target.value)}
+                placeholder="0"
+              />
+              <Select
+                label="Forecast Confidence"
+                value={draft.forecastConfidence || "Medium"}
+                onChange={(e) => updateJobField("forecastConfidence", e.target.value)}
+              >
+                {forecastConfidenceOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+
+              <Textarea
+                label="Forecast Notes"
+                value={draft.forecastNotes ?? ""}
+                onChange={(e) => updateJobField("forecastNotes", e.target.value)}
+                placeholder="Explain why the job should end above or below current numbers"
+                className="md:col-span-2 lg:col-span-4"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             {selectedLine ? (
               <>
                 <div className="mb-4 flex items-center justify-between">
@@ -732,7 +848,9 @@ function JobEditorModal({ job, onClose, onSave }) {
                   <Input
                     label="Main Job / CO #"
                     value={selectedLine.itemNumber}
-                    onChange={(e) => updateLineField(selectedLine.id, "itemNumber", e.target.value)}
+                    onChange={(e) =>
+                      updateLineField(selectedLine.id, "itemNumber", e.target.value)
+                    }
                     placeholder="MAIN or CO-1"
                     disabled={selectedLine.type === "main"}
                   />
@@ -748,7 +866,9 @@ function JobEditorModal({ job, onClose, onSave }) {
                   <Textarea
                     label="Description"
                     value={selectedLine.description}
-                    onChange={(e) => updateLineField(selectedLine.id, "description", e.target.value)}
+                    onChange={(e) =>
+                      updateLineField(selectedLine.id, "description", e.target.value)
+                    }
                     placeholder="Describe the main job or change order"
                     className="md:col-span-2 lg:col-span-4"
                   />
@@ -799,7 +919,9 @@ function JobEditorModal({ job, onClose, onSave }) {
                           type="number"
                           step="0.01"
                           value={selectedLine[key]}
-                          onChange={(e) => updateLineField(selectedLine.id, key, e.target.value)}
+                          onChange={(e) =>
+                            updateLineField(selectedLine.id, key, e.target.value)
+                          }
                           placeholder="0.00"
                         />
                       ))}
@@ -924,7 +1046,9 @@ function OverheadEntryModal({ entry, onClose, onSave }) {
                   <input
                     type="checkbox"
                     checked={!!draft.reviewedByManagement}
-                    onChange={(e) => updateField("reviewedByManagement", e.target.checked)}
+                    onChange={(e) =>
+                      updateField("reviewedByManagement", e.target.checked)
+                    }
                     className="h-4 w-4"
                   />
                   Reviewed by Management
@@ -991,6 +1115,11 @@ export default function App() {
   const [overheadMonthFilter, setOverheadMonthFilter] = useState("All Months");
   const [overheadYearFilter, setOverheadYearFilter] =
     useState(String(new Date().getFullYear()));
+
+  const [forecastSearch, setForecastSearch] = useState("");
+  const [forecastStatusFilter, setForecastStatusFilter] = useState("All Statuses");
+  const [forecastConfidenceFilter, setForecastConfidenceFilter] =
+    useState("All Confidence");
 
   const [activeTab, setActiveTab] = useState("jobs");
   const [editingJobId, setEditingJobId] = useState(null);
@@ -1224,6 +1353,155 @@ export default function App() {
       );
   }, [filteredJobs, reportDepartmentOverheadMap]);
 
+  const forecastOverheadEntries = useMemo(() => {
+    return overheadEntries.filter((entry) => {
+      return (
+        departmentFilter === "All Departments" ||
+        entry.department === departmentFilter
+      );
+    });
+  }, [overheadEntries, departmentFilter]);
+
+  const forecastDepartmentOverheadMap = useMemo(
+    () => buildDepartmentOverheadMap(forecastOverheadEntries),
+    [forecastOverheadEntries]
+  );
+
+  const forecastBaseJobs = useMemo(() => {
+    return filteredJobs.filter((job) => {
+      const statusMatches =
+        forecastStatusFilter === "All Statuses" ||
+        String(job.status || "").toLowerCase() === forecastStatusFilter.toLowerCase();
+
+      const confidenceMatches =
+        forecastConfidenceFilter === "All Confidence" ||
+        (job.forecastConfidence || "Medium") === forecastConfidenceFilter;
+
+      const term = forecastSearch.toLowerCase().trim();
+      const searchMatches =
+        term === "" ||
+        [
+          job.jobNumber,
+          job.customer,
+          job.description,
+          job.department,
+          job.status,
+          job.forecastNotes,
+          job.forecastConfidence,
+        ].some((value) => String(value || "").toLowerCase().includes(term));
+
+      return statusMatches && confidenceMatches && searchMatches;
+    });
+  }, [filteredJobs, forecastStatusFilter, forecastConfidenceFilter, forecastSearch]);
+
+  const forecastDepartmentSalesMap = useMemo(() => {
+    return forecastBaseJobs.reduce((acc, job) => {
+      const forecastSales = (() => {
+        const actual = calculateJob(job).sales;
+        const isClosed = String(job.status || "").toLowerCase() === "closed";
+        const estimatedFinalSales = toNumber(job.estimatedFinalSales);
+        if (isClosed) return actual;
+        return estimatedFinalSales > 0 ? estimatedFinalSales : actual;
+      })();
+
+      const dept = job.department || "Unknown";
+      acc[dept] = (acc[dept] || 0) + forecastSales;
+      return acc;
+    }, {});
+  }, [forecastBaseJobs]);
+
+  const forecastRows = useMemo(() => {
+    return forecastBaseJobs.map((job) => {
+      const forecast = calculateForecastForJob(
+        job,
+        forecastDepartmentSalesMap,
+        forecastDepartmentOverheadMap
+      );
+
+      return {
+        job,
+        ...forecast,
+      };
+    });
+  }, [forecastBaseJobs, forecastDepartmentSalesMap, forecastDepartmentOverheadMap]);
+
+  const forecastTotals = useMemo(() => {
+    return forecastRows.reduce(
+      (acc, row) => {
+        const isClosed = String(row.job.status || "").toLowerCase() === "closed";
+        if (isClosed) {
+          acc.closedActualProfitLoss += row.actualGrossProfitLoss;
+        } else {
+          acc.openProjectedProfitLoss += row.projectedFinalGrossProfitLoss;
+        }
+
+        acc.projectedGrossProfitLoss += row.projectedFinalGrossProfitLoss;
+        acc.projectedOverhead += row.allocatedOverhead;
+        acc.projectedYearEndProfitLoss += row.projectedFinalAdjustedProfitLoss;
+        acc.projectedSales += row.forecastSales;
+
+        return acc;
+      },
+      {
+        closedActualProfitLoss: 0,
+        openProjectedProfitLoss: 0,
+        projectedGrossProfitLoss: 0,
+        projectedOverhead: 0,
+        projectedYearEndProfitLoss: 0,
+        projectedSales: 0,
+      }
+    );
+  }, [forecastRows]);
+
+  const projectedYearEndMargin =
+    forecastTotals.projectedSales > 0
+      ? (forecastTotals.projectedYearEndProfitLoss / forecastTotals.projectedSales) * 100
+      : 0;
+
+  const forecastDepartmentRows = useMemo(() => {
+    return departmentOptions
+      .map((department) => {
+        const departmentRows = forecastRows.filter((row) => row.job.department === department);
+
+        const totals = departmentRows.reduce(
+          (acc, row) => {
+            const isClosed = String(row.job.status || "").toLowerCase() === "closed";
+            if (isClosed) {
+              acc.closedActualProfitLoss += row.actualGrossProfitLoss;
+            } else {
+              acc.openProjectedProfitLoss += row.projectedFinalGrossProfitLoss;
+            }
+
+            acc.projectedGrossProfitLoss += row.projectedFinalGrossProfitLoss;
+            acc.projectedOverhead += row.allocatedOverhead;
+            acc.projectedAdjustedContribution += row.projectedFinalAdjustedProfitLoss;
+
+            return acc;
+          },
+          {
+            closedActualProfitLoss: 0,
+            openProjectedProfitLoss: 0,
+            projectedGrossProfitLoss: 0,
+            projectedOverhead: 0,
+            projectedAdjustedContribution: 0,
+          }
+        );
+
+        return {
+          department,
+          ...totals,
+        };
+      })
+      .filter(
+        (row) =>
+          row.closedActualProfitLoss !== 0 ||
+          row.openProjectedProfitLoss !== 0 ||
+          row.projectedGrossProfitLoss !== 0 ||
+          row.projectedOverhead !== 0 ||
+          row.projectedAdjustedContribution !== 0
+      );
+  }, [forecastRows]);
+
   const activeJob = jobs.find((job) => job.id === editingJobId) || null;
   const activeOverheadEntry =
     overheadEntries.find((entry) => entry.id === editingOverheadId) || null;
@@ -1292,6 +1570,13 @@ export default function App() {
     }, 150);
   };
 
+  const printForecastReport = () => {
+    setActiveTab("forecast");
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
   const exportReport = () => {
     const report = adjustedReportRows.map((row) => ({
       jobNumber: row.job.jobNumber,
@@ -1316,6 +1601,31 @@ export default function App() {
     exportJson("overhead-report.json", filteredOverheadEntries);
   };
 
+  const exportForecastReport = () => {
+    const report = forecastRows.map((row) => ({
+      jobNumber: row.job.jobNumber,
+      customer: row.job.customer,
+      department: row.job.department,
+      status: row.job.status,
+      reviewedByManagement: !!row.job.reviewedByManagement,
+      actualSales: row.actualSales,
+      actualExpenses: row.actualExpenses,
+      actualGrossProfitLoss: row.actualGrossProfitLoss,
+      estimatedFinalSales: toNumber(row.job.estimatedFinalSales),
+      estimatedFinalExpenses: toNumber(row.job.estimatedFinalExpenses),
+      projectedFinalGrossProfitLoss: row.projectedFinalGrossProfitLoss,
+      allocatedOverhead: row.allocatedOverhead,
+      projectedFinalAdjustedProfitLoss: row.projectedFinalAdjustedProfitLoss,
+      projectedFinalAdjustedMargin: Number(row.projectedFinalAdjustedMargin.toFixed(2)),
+      percentComplete: row.job.percentComplete,
+      forecastConfidence: row.job.forecastConfidence || "Medium",
+      forecastNotes: row.job.forecastNotes || "",
+      source: row.source,
+    }));
+
+    exportJson("forecast-report.json", report);
+  };
+
   const reportTitle =
     departmentFilter === "All Departments"
       ? "Profitability Report"
@@ -1325,6 +1635,11 @@ export default function App() {
     overheadDepartmentFilter === "All Departments"
       ? "Department Overhead Report"
       : `${overheadDepartmentFilter} Overhead Report`;
+
+  const forecastReportTitle =
+    departmentFilter === "All Departments"
+      ? "Year-End Forecast Report"
+      : `${departmentFilter} Year-End Forecast Report`;
 
   const printedOn = new Date().toLocaleString();
 
@@ -1463,6 +1778,12 @@ export default function App() {
             >
               <FileText className="h-4 w-4" /> Overhead
             </Button>
+            <Button
+              variant={activeTab === "forecast" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("forecast")}
+            >
+              <BarChart3 className="h-4 w-4" /> Forecast
+            </Button>
             <Button variant="secondary" onClick={exportAll}>
               <FileText className="h-4 w-4" /> Export Jobs
             </Button>
@@ -1479,6 +1800,8 @@ export default function App() {
                   ? "Department Overhead Tracking"
                   : activeTab === "reports"
                   ? "Adjusted Profitability Reporting"
+                  : activeTab === "forecast"
+                  ? "Year-End Forecasting"
                   : "Job + Change Order Tracking"}
               </div>
               <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
@@ -1486,6 +1809,8 @@ export default function App() {
                   ? "Non-Billable Department Costs and Overhead Reporting"
                   : activeTab === "reports"
                   ? "Gross vs Adjusted Profitability After Overhead"
+                  : activeTab === "forecast"
+                  ? "Projected Year-End Profit / Loss and Margin Forecast"
                   : "Main Job P&L and Change Order P&L in One App"}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200 md:text-base">
@@ -1493,6 +1818,8 @@ export default function App() {
                   ? "Track time off, benefits, donations, safety supplies, shirts, PCs, office purchases, and other non-billable costs by department."
                   : activeTab === "reports"
                   ? "Show management how overhead changes each job, each department, and the overall bottom line."
+                  : activeTab === "forecast"
+                  ? "Estimate where the year ends if current jobs finish as expected, with forecasted gross and adjusted profitability."
                   : "Create a parent job, add change orders under the same job, track separate profitability for each line, and view rolled-up totals for the full project."}
               </p>
             </div>
@@ -1510,6 +1837,18 @@ export default function App() {
                     onClick={exportOverheadReport}
                   >
                     <Save className="h-4 w-4" /> Export Overhead
+                  </Button>
+                </>
+              ) : activeTab === "forecast" ? (
+                <>
+                  <Button variant="secondary" onClick={printForecastReport}>
+                    Print Forecast
+                  </Button>
+                  <Button
+                    className="bg-white text-slate-900 hover:bg-slate-200"
+                    onClick={exportForecastReport}
+                  >
+                    <Save className="h-4 w-4" /> Export Forecast
                   </Button>
                 </>
               ) : (
@@ -2003,7 +2342,7 @@ export default function App() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : activeTab === "overhead" ? (
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <StatCard
@@ -2251,6 +2590,324 @@ export default function App() {
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                title="Closed Job Actual P&L"
+                value={formatCurrency(forecastTotals.closedActualProfitLoss)}
+                accent={
+                  forecastTotals.closedActualProfitLoss >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }
+              />
+              <StatCard
+                title="Open Job Projected P&L"
+                value={formatCurrency(forecastTotals.openProjectedProfitLoss)}
+                accent={
+                  forecastTotals.openProjectedProfitLoss >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }
+              />
+              <StatCard
+                title="Projected Gross P&L"
+                value={formatCurrency(forecastTotals.projectedGrossProfitLoss)}
+                accent={
+                  forecastTotals.projectedGrossProfitLoss >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                title="Projected Overhead"
+                value={formatCurrency(forecastTotals.projectedOverhead)}
+                accent="text-amber-600"
+              />
+              <StatCard
+                title="Projected Year-End P&L"
+                value={formatCurrency(forecastTotals.projectedYearEndProfitLoss)}
+                accent={
+                  forecastTotals.projectedYearEndProfitLoss >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }
+              />
+              <StatCard
+                title="Projected Year-End Margin"
+                value={formatPercent(projectedYearEndMargin)}
+                accent={
+                  projectedYearEndMargin >= 0 ? "text-emerald-600" : "text-red-600"
+                }
+              />
+            </div>
+
+            <div className="print-only report-print-header">
+              <div className="report-print-company">Northeast Data</div>
+              <div className="report-print-title">{forecastReportTitle}</div>
+              <div className="report-print-subtitle">
+                Projected year-end profitability based on current job forecasts
+              </div>
+
+              <div className="report-print-meta">
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Department</div>
+                  <div className="report-print-value">
+                    {departmentFilter === "All Departments" ? "All Departments" : departmentFilter}
+                  </div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Printed</div>
+                  <div className="report-print-value">{printedOn}</div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Jobs</div>
+                  <div className="report-print-value">{forecastRows.length}</div>
+                </div>
+
+                <div className="report-print-meta-item">
+                  <div className="report-print-label">Projected Year-End P&L</div>
+                  <div className="report-print-value">
+                    {formatCurrency(forecastTotals.projectedYearEndProfitLoss)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm no-print">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-xl font-bold text-slate-900">Forecast Filters</div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    Use current actuals for closed jobs and estimated finals for open jobs where entered.
+                  </div>
+                </div>
+
+                <div className="flex w-full flex-col gap-3 lg:w-auto lg:flex-row lg:items-center">
+                  <div className="min-w-[180px]">
+                    <Select
+                      value={forecastStatusFilter}
+                      onChange={(e) => setForecastStatusFilter(e.target.value)}
+                    >
+                      <option value="All Statuses">All Statuses</option>
+                      <option value="Open">Open</option>
+                      <option value="Closed">Closed</option>
+                    </Select>
+                  </div>
+
+                  <div className="min-w-[180px]">
+                    <Select
+                      value={forecastConfidenceFilter}
+                      onChange={(e) => setForecastConfidenceFilter(e.target.value)}
+                    >
+                      <option value="All Confidence">All Confidence</option>
+                      {forecastConfidenceOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="relative w-full lg:w-[320px]">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={forecastSearch}
+                      onChange={(e) => setForecastSearch(e.target.value)}
+                      placeholder="Search forecast jobs..."
+                      className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 text-xl font-bold text-slate-900 no-print">
+                Forecast by Job
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-[2300px] text-sm">
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-bold">Job #</th>
+                      <th className="px-4 py-3 text-left font-bold">Customer</th>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
+                      <th className="px-4 py-3 text-left font-bold">Status</th>
+                      <th className="px-4 py-3 text-right font-bold">Actual Sales</th>
+                      <th className="px-4 py-3 text-right font-bold">Actual Expenses</th>
+                      <th className="px-4 py-3 text-right font-bold">Actual Gross P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Estimated Final Sales</th>
+                      <th className="px-4 py-3 text-right font-bold">Estimated Final Expenses</th>
+                      <th className="px-4 py-3 text-right font-bold">Projected Final Gross P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Allocated Overhead</th>
+                      <th className="px-4 py-3 text-right font-bold">Projected Final Adjusted P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Projected Final Adjusted Margin</th>
+                      <th className="px-4 py-3 text-right font-bold">% Complete</th>
+                      <th className="px-4 py-3 text-left font-bold">Confidence</th>
+                      <th className="px-4 py-3 text-left font-bold">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecastRows.map((row) => (
+                      <tr key={row.job.id} className="border-t border-slate-200 bg-white">
+                        <td className="px-4 py-3 font-semibold text-slate-900">
+                          {row.job.jobNumber || "—"}
+                        </td>
+                        <td className="px-4 py-3">{row.job.customer || "—"}</td>
+                        <td className="px-4 py-3">{row.job.department || "—"}</td>
+                        <td className="px-4 py-3">{row.job.status || "—"}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(row.actualSales)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(row.actualExpenses)}</td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.actualGrossProfitLoss >= 0
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(row.actualGrossProfitLoss)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {formatCurrency(
+                            toNumber(row.job.estimatedFinalSales) || row.forecastSales
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {formatCurrency(
+                            toNumber(row.job.estimatedFinalExpenses) || row.forecastExpenses
+                          )}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.projectedFinalGrossProfitLoss >= 0
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(row.projectedFinalGrossProfitLoss)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-amber-700">
+                          {formatCurrency(row.allocatedOverhead)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.projectedFinalAdjustedProfitLoss >= 0
+                              ? "text-emerald-700"
+                              : "text-red-700"
+                          }`}
+                        >
+                          {formatCurrency(row.projectedFinalAdjustedProfitLoss)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.projectedFinalAdjustedMargin >= 0
+                              ? "text-emerald-700"
+                              : "text-red-700"
+                          }`}
+                        >
+                          {formatPercent(row.projectedFinalAdjustedMargin)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {row.job.percentComplete ? `${row.job.percentComplete}%` : "—"}
+                        </td>
+                        <td className={`px-4 py-3 font-semibold ${confidenceAccent(row.job.forecastConfidence || "Medium")}`}>
+                          {row.job.forecastConfidence || "Medium"}
+                        </td>
+                        <td className="px-4 py-3">{row.source}</td>
+                      </tr>
+                    ))}
+                    {forecastRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={16} className="px-4 py-10 text-center text-slate-500">
+                          No forecast jobs found.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 text-xl font-bold text-slate-900">
+                Department Forecast Summary
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-bold">Department</th>
+                      <th className="px-4 py-3 text-right font-bold">Closed Job Actual P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Open Job Projected P&L</th>
+                      <th className="px-4 py-3 text-right font-bold">Projected Gross Total</th>
+                      <th className="px-4 py-3 text-right font-bold">Projected Overhead</th>
+                      <th className="px-4 py-3 text-right font-bold">Projected Adjusted Contribution</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecastDepartmentRows.map((row) => (
+                      <tr key={row.department} className="border-t border-slate-200 bg-white">
+                        <td className="px-4 py-3 font-semibold text-slate-900">{row.department}</td>
+                        <td
+                          className={`px-4 py-3 text-right ${
+                            row.closedActualProfitLoss >= 0
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(row.closedActualProfitLoss)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right ${
+                            row.openProjectedProfitLoss >= 0
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(row.openProjectedProfitLoss)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.projectedGrossProfitLoss >= 0
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {formatCurrency(row.projectedGrossProfitLoss)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-amber-700">
+                          {formatCurrency(row.projectedOverhead)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 text-right font-semibold ${
+                            row.projectedAdjustedContribution >= 0
+                              ? "text-emerald-700"
+                              : "text-red-700"
+                          }`}
+                        >
+                          {formatCurrency(row.projectedAdjustedContribution)}
+                        </td>
+                      </tr>
+                    ))}
+                    {forecastDepartmentRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                          No forecast department data found.
+                        </td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>
