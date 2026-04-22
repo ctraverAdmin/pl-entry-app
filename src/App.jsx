@@ -29,10 +29,6 @@ const departmentOptions = [
 ];
 
 const overheadCategoryOptions = [
-  "Time Off / PTO",
-  "Benefits",
-  "Payroll Taxes",
-  "Bonuses",
   "Training",
   "Donations / Sponsorships",
   "Safety Supplies",
@@ -1033,9 +1029,28 @@ export default function App() {
   const reportDepartmentOverheadMap = useMemo(() => buildDepartmentOverheadMap(reportOverheadEntries), [reportOverheadEntries]);
   const reportDepartmentSalesMap = useMemo(() => buildDepartmentSalesMap(filteredJobs), [filteredJobs]);
 
-  const jobsHeaderDepartmentBurden = useMemo(() => {
+
+
+const jobsHeaderDepartmentBurden = useMemo(() => {
+  if (departmentFilter === "All Departments") {
+    return burdenSummaryTotals.annualCost;
+  }
+
+  const row = burdenDepartmentRows.find(
+    (item) => item.department === departmentFilter
+  );
+
+  return row ? row.annualCost : 0;
+}, [departmentFilter, burdenDepartmentRows, burdenSummaryTotals]);
+
+const jobsHeaderNonLaborOverhead = useMemo(() => {
   return reportOverheadTotals.total;
 }, [reportOverheadTotals]);
+
+const jobsHeaderTotalDepartmentCost = useMemo(() => {
+  return jobsHeaderDepartmentBurden + jobsHeaderNonLaborOverhead;
+}, [jobsHeaderDepartmentBurden, jobsHeaderNonLaborOverhead]);
+
 
 const jobsHeaderAdjustedProfitLoss = useMemo(() => {
   return filteredTotals.profitLoss - jobsHeaderDepartmentBurden;
@@ -1063,6 +1078,7 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
     return sum + forecast.projectedFinalAdjustedProfitLoss;
   }, 0);
 }, [filteredJobs, jobsHeaderForecastDepartmentSalesMap, reportDepartmentOverheadMap]);
+
 
   const adjustedReportRows = useMemo(() => {
     return filteredJobs.map((job) => {
@@ -1513,6 +1529,7 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
         {activeTab === "jobs" ? (
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+              </div>
   <StatCard
     title={departmentFilter === "All Departments" ? "Total Sales" : `${departmentFilter} Sales`}
     value={formatCurrency(filteredTotals.sales)}
@@ -1523,6 +1540,7 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
     value={formatCurrency(filteredTotals.totalExpenses)}
   />
 
+<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
   <StatCard
     title={departmentFilter === "All Departments" ? "Total Profit / Loss" : `${departmentFilter} Profit / Loss`}
     value={formatCurrency(filteredTotals.profitLoss)}
@@ -1532,11 +1550,21 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
   <StatCard
     title={departmentFilter === "All Departments" ? "Department Burden" : `${departmentFilter} Burden`}
     value={formatCurrency(jobsHeaderDepartmentBurden)}
-    accent={jobsHeaderDepartmentBurden === 0 ? "text-slate-900" : "text-amber-600"}
   />
 
   <StatCard
-    title={departmentFilter === "All Departments" ? "P&L Minus Burden" : `${departmentFilter} P&L Minus Burden`}
+    title={departmentFilter === "All Departments" ? "Non-Labor Overhead" : `${departmentFilter} Non-Labor Overhead`}
+    value={formatCurrency(jobsHeaderNonLaborOverhead)}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Department Cost" : `${departmentFilter} Total Department Cost`}
+    value={formatCurrency(jobsHeaderTotalDepartmentCost)}
+    accent="text-amber-600"
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "P&L Minus Dept Cost" : `${departmentFilter} P&L Minus Dept Cost`}
     value={formatCurrency(jobsHeaderAdjustedProfitLoss)}
     accent={jobsHeaderAdjustedProfitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
   />
@@ -1571,7 +1599,7 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
     accent="text-amber-600"
   />
 </div>
-
+  
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
