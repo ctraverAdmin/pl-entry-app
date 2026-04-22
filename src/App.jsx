@@ -24,6 +24,7 @@ const departmentOptions = [
   "Design",
   "Network",
   "Sales",
+  "Operations",
   "Network Integration",
 ];
 
