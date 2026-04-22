@@ -1008,7 +1008,7 @@ export default function App() {
     });
   }, [overheadEntries, overheadDepartmentFilter, overheadCategoryFilter, overheadMonthFilter, overheadYearFilter, overheadSearch]);
 
-  const overallTotals = useMemo(() => totalsForJobs(jobs), [jobs]);
+  
 
   const jobsWithCompletion = useMemo(() => {
     return filteredJobs.map((job) => {
@@ -1026,7 +1026,14 @@ export default function App() {
   const filteredTotalBidCost = useMemo(() => {
   return filteredJobs.reduce((sum, job) => sum + toNumber(job.totalBidCost), 0);
 }, [filteredJobs]);
-const jobsHeaderDepartmentBurden = useMemo(() => {
+
+
+  const reportOverheadEntries = useMemo(() => overheadEntries.filter((entry) => departmentFilter === "All Departments" || entry.department === departmentFilter), [overheadEntries, departmentFilter]);
+  const reportOverheadTotals = useMemo(() => totalsForOverhead(reportOverheadEntries), [reportOverheadEntries]);
+  const reportDepartmentOverheadMap = useMemo(() => buildDepartmentOverheadMap(reportOverheadEntries), [reportOverheadEntries]);
+  const reportDepartmentSalesMap = useMemo(() => buildDepartmentSalesMap(filteredJobs), [filteredJobs]);
+
+  const jobsHeaderDepartmentBurden = useMemo(() => {
   return reportOverheadTotals.total;
 }, [reportOverheadTotals]);
 
@@ -1056,11 +1063,6 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
     return sum + forecast.projectedFinalAdjustedProfitLoss;
   }, 0);
 }, [filteredJobs, jobsHeaderForecastDepartmentSalesMap, reportDepartmentOverheadMap]);
-
-  const reportOverheadEntries = useMemo(() => overheadEntries.filter((entry) => departmentFilter === "All Departments" || entry.department === departmentFilter), [overheadEntries, departmentFilter]);
-  const reportOverheadTotals = useMemo(() => totalsForOverhead(reportOverheadEntries), [reportOverheadEntries]);
-  const reportDepartmentOverheadMap = useMemo(() => buildDepartmentOverheadMap(reportOverheadEntries), [reportOverheadEntries]);
-  const reportDepartmentSalesMap = useMemo(() => buildDepartmentSalesMap(filteredJobs), [filteredJobs]);
 
   const adjustedReportRows = useMemo(() => {
     return filteredJobs.map((job) => {
@@ -1420,12 +1422,7 @@ const jobsHeaderYearEndPrediction = useMemo(() => {
     });
   };
 
-  const reportTitle = departmentFilter === "All Departments" ? "Profitability Report" : `${departmentFilter} Profitability Report`;
-  const overheadReportTitle = overheadDepartmentFilter === "All Departments" ? "Department Overhead Report" : `${overheadDepartmentFilter} Overhead Report`;
-  const forecastReportTitle = departmentFilter === "All Departments" ? "Year-End Forecast Report" : `${departmentFilter} Year-End Forecast Report`;
-  const burdenReportTitle = burdenDepartmentFilter === "All Departments" ? "Department Burden Report" : `${burdenDepartmentFilter} Department Burden Report`;
-  const printedOn = new Date().toLocaleString();
-
+  
   return (
     <div className="min-h-screen bg-slate-100">
       <style>{`
