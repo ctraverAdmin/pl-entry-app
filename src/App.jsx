@@ -1026,6 +1026,36 @@ export default function App() {
   const filteredTotalBidCost = useMemo(() => {
   return filteredJobs.reduce((sum, job) => sum + toNumber(job.totalBidCost), 0);
 }, [filteredJobs]);
+const jobsHeaderDepartmentBurden = useMemo(() => {
+  return reportOverheadTotals.total;
+}, [reportOverheadTotals]);
+
+const jobsHeaderAdjustedProfitLoss = useMemo(() => {
+  return filteredTotals.profitLoss - jobsHeaderDepartmentBurden;
+}, [filteredTotals, jobsHeaderDepartmentBurden]);
+
+const jobsHeaderForecastDepartmentSalesMap = useMemo(() => {
+  return filteredJobs.reduce((acc, job) => {
+    const actual = calculateJob(job).sales;
+    const isClosed = String(job.status || "").toLowerCase() === "closed";
+    const estimatedFinalSales = toNumber(job.estimatedFinalSales);
+    const forecastSales = isClosed ? actual : estimatedFinalSales > 0 ? estimatedFinalSales : actual;
+    const dept = job.department || "Unknown";
+    acc[dept] = (acc[dept] || 0) + forecastSales;
+    return acc;
+  }, {});
+}, [filteredJobs]);
+
+const jobsHeaderYearEndPrediction = useMemo(() => {
+  return filteredJobs.reduce((sum, job) => {
+    const forecast = calculateForecastForJob(
+      job,
+      jobsHeaderForecastDepartmentSalesMap,
+      reportDepartmentOverheadMap
+    );
+    return sum + forecast.projectedFinalAdjustedProfitLoss;
+  }, 0);
+}, [filteredJobs, jobsHeaderForecastDepartmentSalesMap, reportDepartmentOverheadMap]);
 
   const reportOverheadEntries = useMemo(() => overheadEntries.filter((entry) => departmentFilter === "All Departments" || entry.department === departmentFilter), [overheadEntries, departmentFilter]);
   const reportOverheadTotals = useMemo(() => totalsForOverhead(reportOverheadEntries), [reportOverheadEntries]);
@@ -1485,18 +1515,65 @@ export default function App() {
 
         {activeTab === "jobs" ? (
           <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard title={departmentFilter === "All Departments" ? "Total Sales" : `${departmentFilter} Sales`} value={formatCurrency(filteredTotals.sales)} />
-              <StatCard title={departmentFilter === "All Departments" ? "Total Expenses" : `${departmentFilter} Expenses`} value={formatCurrency(filteredTotals.totalExpenses)} />
-              <StatCard title={departmentFilter === "All Departments" ? "Total Profit / Loss" : `${departmentFilter} Profit / Loss`} value={formatCurrency(filteredTotals.profitLoss)} accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"} />
-              <StatCard title={departmentFilter === "All Departments" ? "Total Margin %" : `${departmentFilter} Margin %`} value={formatPercent(filteredMargin)} accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"} />
-            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Sales" : `${departmentFilter} Sales`}
+    value={formatCurrency(filteredTotals.sales)}
+  />
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <StatCard title={departmentFilter === "All Departments" ? "Total Materials" : `${departmentFilter} Materials`} value={formatCurrency(filteredTotals.materials)} />
-              <StatCard title={departmentFilter === "All Departments" ? "Total Freight" : `${departmentFilter} Freight`} value={formatCurrency(filteredTotals.freightDelivery)} />
-              <StatCard title={departmentFilter === "All Departments" ? "Total Freight % of Materials" : `${departmentFilter} Freight % of Materials`} value={formatPercent(filteredFreightPct)} accent="text-amber-600" />
-            </div>
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Expenses" : `${departmentFilter} Expenses`}
+    value={formatCurrency(filteredTotals.totalExpenses)}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Profit / Loss" : `${departmentFilter} Profit / Loss`}
+    value={formatCurrency(filteredTotals.profitLoss)}
+    accent={filteredTotals.profitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Department Burden" : `${departmentFilter} Burden`}
+    value={formatCurrency(jobsHeaderDepartmentBurden)}
+    accent={jobsHeaderDepartmentBurden === 0 ? "text-slate-900" : "text-amber-600"}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "P&L Minus Burden" : `${departmentFilter} P&L Minus Burden`}
+    value={formatCurrency(jobsHeaderAdjustedProfitLoss)}
+    accent={jobsHeaderAdjustedProfitLoss >= 0 ? "text-emerald-600" : "text-red-600"}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Year-End P&L Prediction" : `${departmentFilter} Year-End P&L Prediction`}
+    value={formatCurrency(jobsHeaderYearEndPrediction)}
+    accent={jobsHeaderYearEndPrediction >= 0 ? "text-emerald-600" : "text-red-600"}
+  />
+</div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Margin %" : `${departmentFilter} Margin %`}
+    value={formatPercent(filteredMargin)}
+    accent={filteredMargin >= 0 ? "text-emerald-600" : "text-red-600"}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Materials" : `${departmentFilter} Materials`}
+    value={formatCurrency(filteredTotals.materials)}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Freight" : `${departmentFilter} Freight`}
+    value={formatCurrency(filteredTotals.freightDelivery)}
+  />
+
+  <StatCard
+    title={departmentFilter === "All Departments" ? "Total Freight % of Materials" : `${departmentFilter} Freight % of Materials`}
+    value={formatPercent(filteredFreightPct)}
+    accent="text-amber-600"
+  />
+</div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
