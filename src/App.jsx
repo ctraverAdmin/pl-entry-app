@@ -1023,6 +1023,9 @@ export default function App() {
   const departmentOverheadSummary = useMemo(() => overheadByDepartment(filteredOverheadEntries), [filteredOverheadEntries]);
   const filteredMargin = filteredTotals.sales > 0 ? (filteredTotals.profitLoss / filteredTotals.sales) * 100 : 0;
   const filteredFreightPct = freightPercentOfMaterials(filteredTotals.freightDelivery, filteredTotals.materials);
+  const filteredTotalBidCost = useMemo(() => {
+  return filteredJobs.reduce((sum, job) => sum + toNumber(job.totalBidCost), 0);
+}, [filteredJobs]);
 
   const reportOverheadEntries = useMemo(() => overheadEntries.filter((entry) => departmentFilter === "All Departments" || entry.department === departmentFilter), [overheadEntries, departmentFilter]);
   const reportOverheadTotals = useMemo(() => totalsForOverhead(reportOverheadEntries), [reportOverheadEntries]);
@@ -1560,6 +1563,44 @@ export default function App() {
                     })}
                     {filteredJobs.length === 0 ? <tr><td colSpan={15} className="px-4 py-10 text-center text-slate-500">No jobs found.</td></tr> : null}
                   </tbody>
+                  <tfoot className="bg-slate-200 font-bold text-slate-900">
+  <tr>
+    <td className="px-4 py-3" colSpan={6}>
+      Totals
+    </td>
+    <td className="px-4 py-3 text-right">
+      {formatCurrency(filteredTotals.sales)}
+    </td>
+    <td className="px-4 py-3 text-right">
+      {formatCurrency(filteredTotalBidCost)}
+    </td>
+    <td className="px-4 py-3 text-right">
+      —
+    </td>
+    <td className="px-4 py-3 text-right">
+      {formatCurrency(filteredTotals.totalExpenses)}
+    </td>
+    <td
+      className={`px-4 py-3 text-right ${
+        filteredTotals.profitLoss >= 0 ? "text-emerald-700" : "text-red-700"
+      }`}
+    >
+      {formatCurrency(filteredTotals.profitLoss)}
+    </td>
+    <td
+      className={`px-4 py-3 text-right ${
+        filteredMargin >= 0 ? "text-emerald-700" : "text-red-700"
+      }`}
+    >
+      {formatPercent(filteredMargin)}
+    </td>
+    <td className="px-4 py-3 text-right">
+      {formatPercent(filteredFreightPct)}
+    </td>
+    <td className="px-4 py-3 text-center">—</td>
+    <td className="px-4 py-3 text-center">—</td>
+  </tr>
+</tfoot>
                 </table>
               </div>
             </div>
